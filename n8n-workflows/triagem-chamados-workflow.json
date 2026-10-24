@@ -1,0 +1,111 @@
+{
+  "name": "PoC - Triagem Inteligente GLPI (Hiperautomacao)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "glpi-ticket-webhook",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Webhook GLPI (Novo Chamado)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Chamado Recebido do GLPI:\nTítulo: {{$json.body.ticket_title}}\nDescrição: {{$json.body.ticket_description}}\nSolicitante: {{$json.body.user_email}}",
+        "options": {
+          "systemMessage": "Você é um classificador determinístico para triagem de chamados do GLPI. Responda ESTRITAMENTE em formato JSON com as chaves: intencao, urgencia, categoria_glpi, confianca (0.0 a 1.0), resumo_demanda, resposta_sugerida e requer_revisao_humana (booleano, true se confianca < 0.85 ou alta ambiguidade)."
+        }
+      },
+      "id": "2",
+      "name": "Agente Cognitivo LLM (Parsing)",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.output.requer_revisao_humana}}",
+              "value2": false
+            }
+          ],
+          "number": [
+            {
+              "value1": "={{$json.output.confianca}}",
+              "operation": "largerEqual",
+              "value2": 0.85
+            }
+          ]
+        }
+      },
+      "id": "3",
+      "name": "Verifica Confianca (Score >= 0.85)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "ticketId": "={{$('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id}}",
+        "category": "={{$json.output.categoria_glpi}}",
+        "urgency": "={{$json.output.urgencia}}",
+        "solution": "={{$json.output.resposta_sugerida}}"
+      },
+      "id": "4",
+      "name": "Atualiza Chamado no GLPI (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "table": "chamados_triagem",
+        "columns": "remetente_email, conteudo_original, intencao_classificada, nivel_urgencia, categoria_sugerida, confianca_ia, status_processamento, resposta_sugerida"
+      },
+      "id": "5",
+      "name": "Registra Auditoria no Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1200, 200]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "ticketId": "={{$('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id}}",
+        "status": "Aguardando Revisao Humana",
+        "comment": "Triagem automática direcionada para supervisão devido a score de confiança inferior a 85% ou ambiguidade."
+      },
+      "id": "6",
+      "name": "Desvio para Fila Humana (Human-in-the-Loop)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [960, 420]
+    }
+  ],
+  "connections": {
+    "Webhook GLPI (Novo Chamado)": {
+      "main": [[{ "node": "Agente Cognitivo LLM (Parsing)", "type": "main", "index": 0 }]]
+    },
+    "Agente Cognitivo LLM (Parsing)": {
+      "main": [[{ "node": "Verifica Confianca (Score >= 0.85)", "type": "main", "index": 0 }]]
+    },
+    "Verifica Confianca (Score >= 0.85)": {
+      "main": [
+        [{ "node": "Atualiza Chamado no GLPI (API)", "type": "main", "index": 0 }],
+        [{ "node": "Desvio para Fila Humana (Human-in-the-Loop)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Atualiza Chamado no GLPI (API)": {
+      "main": [[{ "node": "Registra Auditoria no Supabase", "type": "main", "index": 0 }]]
+    }
+  }
+}
