@@ -49,6 +49,8 @@ tcc-hiperautomacao-poc/
 ├── docs/
 │   └── imagens/                           # Diagramas BPMN, topologia n8n, Supabase real e DER SQL
 ├── evidencias/
+│   ├── historico_execucoes_n8n.csv        # Histórico completo do banco SQLite do n8n (112 execuções: IDs, status, UUIDs)
+│   ├── historico_execucoes_n8n.json       # Espelho estruturado das 112 execuções originais em execution_entity
 │   ├── logs_execucao_n8n_100.json         # Logs sanitizados das 100 execuções ao vivo no n8n + Gemini
 │   ├── resultados_execucao_100.csv        # Tabela completa dos 100 resultados gravados no Supabase
 │   ├── resultados_execucao_100.json       # Espelho detalhado em JSON (Supabase + n8n_execution_id + gabarito)
@@ -71,18 +73,14 @@ tcc-hiperautomacao-poc/
 Todas as 100 solicitações sintéticas (`IDs 2001` a `2100`) percorreram integralmente o fluxo no **n8n v2.47.7**, receberam inferência ao vivo do **Google Gemini (`models/gemini-3.5-flash-lite`, `temperature = 0`)**, acionaram a emulação HTTP (`https://httpbin.org/post` — 100/100 retornaram HTTP `200`) e gravaram um registro auditável no **Supabase (`chamados_triagem`)**:
 
 1. **Logs individuais do n8n ([`evidencias/logs_execucao_n8n_100.json`](evidencias/logs_execucao_n8n_100.json)):** contém os 100 rastreamentos nó a nó exportados do banco do n8n (`status = "success"`), incluindo `tokenUsage`, `finishReason = "STOP"`, saída do `Structured Output Parser`, decisão do nó `IF`, corpo ecoado pelo `httpbin.org/post` e UUID retornado pelo Supabase (credenciais e IPs sanitizados).
-2. **Registros reais do Supabase ([`evidencias/resultados_execucao_100.json`](evidencias/resultados_execucao_100.json), `.csv` e [`database/schema.sql`](database/schema.sql)):** preservam as 100 linhas efetivamente inseridas no banco pelo nó `Registra Auditoria no Supabase`, incluindo UUID real, timestamp UTC, sinalizadores individuais de acerto (`acerto_categoria`, `acerto_intencao`, `acerto_roteamento`) e latência medida (`tempo_processamento_ms`), sem preenchimento artificial (`1900` ms removido).
+2. **Registros reais do Supabase ([`evidencias/resultados_execucao_100.json`](evidencias/resultados_execucao_100.json), `.csv` e [`database/schema.sql`](database/schema.sql)):** preservam as 100 linhas efetivamente inseridas no banco pelo nó `Registra Auditoria no Supabase`, incluindo UUID real, timestamp UTC, sinalizadores individuais de acerto (`acerto_categoria`, `acerto_intencao`, `acerto_roteamento`) e latência (`tempo_processamento_ms`) efetivamente medida entre a recepção no webhook e a persistência no banco.
 3. **Testes controlados de fronteira via Python ([`scripts/validar_poc.py`](scripts/validar_poc.py) -> [`evidencias/testes_valor_limite_httpbin.json`](evidencias/testes_valor_limite_httpbin.json)):** como o modelo Gemini em execução real retornou confiança em múltiplos de `0,05` (`0,50` a `1,00`), o script Python executa adicionalmente 5 disparos HTTP `POST` diretos contra `https://httpbin.org/post` sobre os exatos valores de fronteira (`0,84`, `0,85`, `0,86` e crítico `0,92`), devidamente rotulados com `executado_no_n8n = false` e `inferencia_gemini_real = false`.
 
-### Evolução das Evidências: Carga SQL Sintética Inicial vs. Nova Bateria Ao Vivo no n8n
+### Rastreabilidade das Execuções Originais no n8n e Análise do Chamado 2089
 
-| Aspecto | Carga Sintética Inicial em SQL *(superada)* | Nova Bateria Ao Vivo (`n8n + Gemini + Supabase`) *(atual)* |
-| :--- | :--- | :--- |
-| **Origem dos dados** | `INSERT` estático pré-preenchido em SQL, sem chamadas reais ao Gemini | 100 execuções ao vivo no `n8n` (`evidencias/logs_execucao_n8n_100.json`) gravadas no Supabase |
-| **Padronizados (`2001..2080`, `N = 80`)** | `74 / 80` (`92,5%`) predeterminada no seed | **`80 / 80` (`100,0%`)** em categoria e intenção |
-| **Global (`2001..2100`, `N = 100`)** | Rótulos estáticos pré-carregados | **`99 / 100` (`99,0%`)** em categoria, intenção e concordância de roteamento |
-| **Encaminhamento** | `82` automáticos / `18` revisões humanas | **`83` automáticos (`83,0%`) / `17` revisões humanas (`17,0%`)** (`8` `< 0,85` + `9` críticos) |
-| **Tempo de processamento** | `NULL` no SQL / placeholder preliminar (`1.900 ms`) no workflow | **`1.519,4 ms`** médios efetivamente medidos (`151.938 ms` no lote; mediana `1.487,0 ms`) |
+- **Histórico integral do `n8n` (`execution_entity` + `execution_data`):** os arquivos [`evidencias/historico_execucoes_n8n.csv`](evidencias/historico_execucoes_n8n.csv) e [`evidencias/historico_execucoes_n8n.json`](evidencias/historico_execucoes_n8n.json) preservam todas as **112 execuções** registradas no banco SQLite do **n8n v2.47.7** (`workflowId = tccPoCTriagemGLPI`): `1` smoke test inicial (`id = 1`, chamado `2001`), `11` tentativas transientes com erro HTTP `429` da camada gratuita da API Gemini (imediatamente reprocessadas com sucesso) e as **100 execuções válidas** do lote principal, com paridade exata de IDs, carimbos temporais UTC, saídas do Gemini, respostas HTTP `200` do endpoint emulado (`httpbin.org`) e UUIDs gravados no Supabase.
+- **Métricas consolidadas da bateria ao vivo (`N = 100`):** **`80 / 80` (`100,0%`)** de acurácia nos chamados padronizados (`2001..2080`), **`99 / 100` (`99,0%`)** de concordância global (`2001..2100`), **`83` encaminhamentos automáticos (`83,0%`)** e **`17` revisões humanas (`17,0%`)** (`8` por confiança `< 0,85` e `9` por flag crítica), com tempo total medido do webhook à persistência no Supabase de **`151.938 ms`** (**média de `1.519,4 ms`**, mediana `1.487,0 ms`; nó Gemini médio de `937,4 ms`; consumo total de `103.060` tokens).
+- **Explicação técnica da divergência no Chamado `2089` (`n8n_execution_id = 101`):** o registro *"Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro"* possuía gabarito `Revisao Humana` (`Ambiguo_Critico`), mas recebeu do Gemini `categoria_glpi = "Software"`, `intencao = "Incidente"`, `urgencia = "Media"`, `confianca = 0.9` e `requer_revisao_humana = false`, sendo encaminhado automaticamente (`supabase_id = f9bc98bd-67aa-4555-9343-56870c1e935a`, `1.557 ms`). Como a descrição aponta inequivocamente para falha em aplicativo (`Software`/`Incidente`), o modelo não identificou ambiguidade estrutural entre categorias e não enquadrou *"sistema financeiro"* nos exemplos literais de criticidade do [`prompts/system-prompt-ia.md`](prompts/system-prompt-ia.md) (*"integração fiscal/faturamento"*), mantendo `confianca = 0.90 >= 0.85`. Para a governança da PoC, esse caso evidencia o risco de excesso de confiança (*overconfidence*) em escores probabilísticos gerados por LLMs e reforça a necessidade de regras determinísticas complementares por palavras-chave no orquestrador, somadas à auditoria periódica de prompts pelo Centro de Excelência (CoE).
 
 ### Indicadores Reais Recalculados dos Logs (`logs_execucao_n8n_100.json` + Supabase)
 
@@ -124,6 +122,9 @@ O cenário *As-Is* representa uma referência conceitual hipotética (sem mediç
 
 ### Topologia do Workflow no n8n
 ![Topologia n8n](docs/imagens/figura2_topologia_n8n.png)
+
+### Histórico Original de Execuções do n8n (`execution_entity`)
+![Histórico Original de Execuções do n8n](docs/imagens/figura4_historico_execucoes_n8n.png)
 
 ### Estrutura Relacional (`database/schema.sql`) e Registros Reais no Supabase
 A estrutura DDL completa e o snapshot das 100 execuções estão documentados em [`database/README.md`](database/README.md) e [`database/schema.sql`](database/schema.sql):

@@ -36,7 +36,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 546.66,
+      "latencia_http_ms": 1115.58,
       "payload_enviado": {
         "ticket_id": "2001",
         "status": "Triado Automaticamente",
@@ -51,7 +51,7 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T20:43:27.572159+00:00"
+    "executado_em_utc": "2026-11-14T21:07:49.554723+00:00"
   },
   {
     "glpi_ticket_id": 2080,
@@ -90,7 +90,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 421.33,
+      "latencia_http_ms": 457.43,
       "payload_enviado": {
         "ticket_id": "2080",
         "status": "Triado Automaticamente",
@@ -105,7 +105,7 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T20:43:27.994169+00:00"
+    "executado_em_utc": "2026-11-14T21:07:50.012690+00:00"
   },
   {
     "glpi_ticket_id": 2081,
@@ -144,7 +144,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 453.96,
+      "latencia_http_ms": 404.97,
       "payload_enviado": {
         "ticket_id": "2081",
         "status": "Triado Automaticamente",
@@ -159,7 +159,7 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T20:43:28.448770+00:00"
+    "executado_em_utc": "2026-11-14T21:07:50.418103+00:00"
   },
   {
     "glpi_ticket_id": 2084,
@@ -198,7 +198,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 457.97,
+      "latencia_http_ms": 420.17,
       "payload_enviado": {
         "ticket_id": "2084",
         "status": "Aguardando Revisao Humana",
@@ -211,7 +211,7 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T20:43:28.907198+00:00"
+    "executado_em_utc": "2026-11-14T21:07:50.838648+00:00"
   },
   {
     "glpi_ticket_id": 2085,
@@ -250,7 +250,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 453.09,
+      "latencia_http_ms": 407.26,
       "payload_enviado": {
         "ticket_id": "2085",
         "status": "Aguardando Revisao Humana",
@@ -263,6 +263,6 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T20:43:29.360835+00:00"
+    "executado_em_utc": "2026-11-14T21:07:51.246479+00:00"
   }
 ]

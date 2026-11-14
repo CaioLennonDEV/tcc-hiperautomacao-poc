@@ -628,6 +628,53 @@ def verify_cross_artifact_metrics_parity(
     assert abs(statistics.median(int(r["tempo_processamento_ms"]) for r in results) - log_metrics["median_e2e_ms"]) < 1e-9
 
 
+def verify_n8n_history_parity(
+    execucoes: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Confere a correspondência 1-para-1 entre o histórico SQLite do n8n (112 linhas) e os logs publicados."""
+    hist_doc = json.loads(
+        (EVIDENCIAS_DIR / "historico_execucoes_n8n.json").read_text(encoding="utf-8")
+    )
+    with (EVIDENCIAS_DIR / "historico_execucoes_n8n.csv").open("r", encoding="utf-8-sig") as f:
+        csv_rows = list(csv.DictReader(f))
+
+    hist_rows = hist_doc["historico_execucoes"]
+    assert len(hist_rows) == len(csv_rows) == 112
+
+    smoke = [r for r in hist_rows if r["papel_na_execucao"] == "smoke_test_inicial"]
+    retries = [r for r in hist_rows if r["papel_na_execucao"] == "tentativa_transiente_retry_429"]
+    lote = [r for r in hist_rows if r["papel_na_execucao"] == "lote_principal_100_chamados"]
+    assert len(smoke) == 1
+    assert len(retries) == 11
+    assert len(lote) == 100
+
+    res_by_eid = {int(r["n8n_execution_id"]): r for r in results}
+    exec_by_eid = {int(e["n8n_execution_id"]): e for e in execucoes}
+    csv_by_eid = {int(c["n8n_execution_id"]): c for c in csv_rows}
+
+    for row in lote:
+        eid = int(row["n8n_execution_id"])
+        ex = exec_by_eid[eid]
+        res = res_by_eid[eid]
+        crow = csv_by_eid[eid]
+
+        assert row["status"] == "success" and row["finished"] is True
+        assert row["startedAt"] == ex["startedAt"] == crow["startedAt"]
+        assert row["stoppedAt"] == ex["stoppedAt"] == crow["stoppedAt"]
+        assert int(row["glpi_ticket_id"]) == int(ex["glpi_ticket_id"]) == int(res["glpi_ticket_id"])
+        assert row["supabase_id"] == res["supabase_id"] == crow["supabase_id"]
+        assert int(row["tempo_processamento_ms"]) == int(res["tempo_processamento_ms"]) == int(crow["tempo_processamento_ms"])
+        assert row["ramo_if"] == res["status_processamento"] == crow["ramo_if"]
+        assert int(row["httpbin_status"]) == 200
+
+    for row in retries:
+        assert row["status"] == "error" and row["finished"] is False
+        assert "HTTP 429" in row["observacao_erro"]
+
+    return hist_doc["metadados_historico"]
+
+
 def generate_summary_markdown(
     tech_config: dict[str, Any],
     logs_doc: dict[str, Any],
@@ -700,20 +747,16 @@ Todos os 100 chamados sintéticos foram executados ao vivo pelo fluxo no **n8n v
 
 1. **Entrada e Gabarito Sintético ([`../data/chamados_sinteticos_100.json`](../data/chamados_sinteticos_100.json), [`../data/gabarito_classificacao_100.csv`](../data/gabarito_classificacao_100.csv)):** 100 chamados fictícios anonimizados (25 Hardware, 25 Software, 25 Redes e 25 Acessos; 80 padronizados `2001..2080` e 20 ambíguos/críticos `2081..2100`).
 2. **Logs Individuais das 100 Execuções no n8n ([`logs_execucao_n8n_100.json`](logs_execucao_n8n_100.json)):** rastreamento completo nó a nó de cada uma das 100 execuções (`n8n_execution_id` com `status = "success"`), comprovando entrada do Webhook, latência e consumo de tokens do `Google Gemini Chat Model`, JSON estruturado do `Structured Output Parser`, ramo do nó `IF`, eco HTTP 200 de `https://httpbin.org/post` e UUID gravado no Supabase.
-3. **Registros Reais Persistidos no Supabase ([`resultados_execucao_100.json`](resultados_execucao_100.json), [`resultados_execucao_100.csv`](resultados_execucao_100.csv) e [`../database/schema.sql`](../database/schema.sql)):** espelho exato das 100 linhas gravadas no banco Supabase pelo nó `Registra Auditoria no Supabase`, preservando UUIDs, timestamps UTC, respostas sugeridas geradas pelo LLM, sinalizadores individuais de acerto (`acerto_categoria`, `acerto_intencao`, `acerto_roteamento`) e `tempo_processamento_ms` medido em tempo real.
-4. **Testes Controlados de Valor-Limite via Python ([`testes_valor_limite_httpbin.json`](testes_valor_limite_httpbin.json)):** requisições `HTTP POST` disparadas diretamente por [`../scripts/validar_poc.py`](../scripts/validar_poc.py) para `https://httpbin.org/post` avaliando exatamente os escores de fronteira `0.84`, `0.85`, `0.86` e `0.92` (`executado_no_n8n = false`, `inferencia_gemini_real = false`), complementando as execuções ao vivo do Gemini (que retornou escores em múltiplos de `0.05`: `0.50`, `0.65`, `0.70`, `0.75`, `0.80`, `0.90`, `0.95`, `1.00`).
+3. **Histórico Original Completo de Execuções do n8n ([`historico_execucoes_n8n.csv`](historico_execucoes_n8n.csv), [`historico_execucoes_n8n.json`](historico_execucoes_n8n.json) e [`../docs/imagens/figura4_historico_execucoes_n8n.png`](../docs/imagens/figura4_historico_execucoes_n8n.png)):** registro cronológico das **112 execuções** originais gravadas pelo n8n em `database.sqlite` (`execution_entity` + `execution_data`), permitindo conferir IDs (`1..112`), horários UTC (`startedAt`/`stoppedAt`), saídas do Gemini, retentativas automáticas para `HTTP 429` (`11` tentativas transientes antes do lote fechar `100/100`) e UUIDs do Supabase.
+4. **Registros Reais Persistidos no Supabase ([`resultados_execucao_100.json`](resultados_execucao_100.json), [`resultados_execucao_100.csv`](resultados_execucao_100.csv) e [`../database/schema.sql`](../database/schema.sql)):** espelho exato das 100 linhas gravadas no banco Supabase pelo nó `Registra Auditoria no Supabase`, preservando UUIDs, timestamps UTC, respostas sugeridas geradas pelo LLM, sinalizadores individuais de acerto (`acerto_categoria`, `acerto_intencao`, `acerto_roteamento`) e `tempo_processamento_ms` medido em tempo real.
+5. **Testes Controlados de Valor-Limite via Python ([`testes_valor_limite_httpbin.json`](testes_valor_limite_httpbin.json)):** requisições `HTTP POST` disparadas diretamente por [`../scripts/validar_poc.py`](../scripts/validar_poc.py) para `https://httpbin.org/post` avaliando exatamente os escores de fronteira `0.84`, `0.85`, `0.86` e `0.92` (`executado_no_n8n = false`, `inferencia_gemini_real = false`), complementando as execuções ao vivo do Gemini (que retornou escores em múltiplos de `0.05`: `0.50`, `0.65`, `0.70`, `0.75`, `0.80`, `0.90`, `0.95`, `1.00`).
 
-### 1.1 Distinção Metodológica: Carga SQL Sintética Inicial vs. Nova Bateria Ao Vivo no n8n
-Para rastreabilidade completa da evolução do repositório e do TCC, documenta-se explicitamente a diferença entre os dados estáticos iniciais e a bateria real executada no n8n:
+### 1.1 Rastreabilidade do Histórico Original no n8n (`112` Registros em `execution_entity`)
+- **`#1` (`smoke_test_inicial`):** validação inicial do webhook com chamado `2001` (`status = success`, `19:51:26.301 UTC`), anterior à limpeza do banco para início do lote experimental.
+- **`100` execuções `lote_principal_100_chamados` (`#2` a `#112`):** janela contínua de `2026-11-14 19:53:03.043` a `19:57:56.242 UTC`, com correspondência 1-para-1 comprovada nos IDs, timestamps, saídas do Gemini, respostas `HTTP 200` do `httpbin.org` e gravações no Supabase.
+- **`11` registros `tentativa_transiente_retry_429` (`status = error`):** falhas pontuais de cota momentânea (`HTTP 429 Too Many Requests` na API gratuita do Gemini nos IDs `#27`, `#29`, `#31`, `#34`, `#51`, `#53`, `#54`, `#77`, `#78`, `#97` e `#100`), imediatamente reenviadas e concluídas com sucesso na execução subsequente.
 
-| Aspecto Avaliado | Carga Sintética Inicial em SQL *(superada)* | Nova Bateria Ao Vivo (`n8n + Gemini + Supabase`) *(atual)* |
-| :--- | :--- | :--- |
-| **Origem dos registros** | `INSERT` estático pré-preenchido em SQL, sem chamadas reais ao Gemini | 100 execuções ao vivo no `n8n` (`evidencias/logs_execucao_n8n_100.json`) persistidas no Supabase |
-| **Acurácia nos 80 padronizados** | `74 / 80` (`92,5%`) predeterminada no seed | **`80 / 80` (`100,0%`)** em categoria e intenção (recalculado dos logs) |
-| **Acurácia categorial global (`N = 100`)** | Derivada dos rótulos sintéticos do seed | **`99 / 100` (`99,0%`)** em categoria, intenção e roteamento |
-| **Distribuição de encaminhamento** | `82` automáticos / `18` revisões humanas | **`83` automáticos (`83,0%`) / `17` revisões humanas (`17,0%`)** (`8` `< 0.85` + `9` críticos) |
-| **Tempo de processamento** | `NULL` no SQL / placeholder preliminar (`1.900 ms`) no workflow | **`1.519,4 ms`** médios efetivamente medidos (`151.938 ms` no lote; mediana `1.487,0 ms`) |
-| **Escopo da avaliação** | Ilustração estática sem rastreamento nó a nó | Avaliação técnica controlada da própria PoC (sem comparação empírica com atendimento humano real) |
+![Histórico Original de Execuções do n8n](../docs/imagens/figura4_historico_execucoes_n8n.png)
 
 ---
 
@@ -777,7 +820,14 @@ Todos os números abaixo foram recalculados diretamente pelo script [`../scripts
 | :---: | :---: | :--- | :---: | :---: | :---: |
 {linhas_div}
 
-> **Análise das divergências:** Nos casos `2083` e `2090`, apesar da diferença pontual de intenção (`2083`) ou categoria (`2090`) em relatos propositalmente vagos, o modelo atribuiu confiança baixa (`0,65` e `0,50`) e sinalizou `requer_revisao_humana = true`, garantindo o desvio seguro para **Revisão Humana**. No chamado `2089` (*"Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro"*), o modelo acertou a categoria (`Software`) e a intenção (`Incidente`), mas atribuiu `confianca = 0,90` com `requer_revisao_humana = false`, encaminhando automaticamente apesar da expectativa conservadora do gabarito.
+> **Análise das divergências:** Nos casos `2083` e `2090`, apesar da diferença pontual de intenção (`2083`) ou categoria (`2090`) em relatos propositalmente vagos, o modelo atribuiu confiança baixa (`0,65` e `0,50`) e sinalizou `requer_revisao_humana = true`, garantindo o desvio seguro para **Revisão Humana**. Já o chamado `2089` explicita uma exceção crítica para a governança do modelo.
+
+### 4.4 Análise Específica do Chamado `2089` e Implicações para a Governança da PoC
+- **Execução no n8n:** `n8n_execution_id = 101` (`2026-11-14 19:57:28.701` a `19:57:30.369 UTC`), UUID Supabase `f9bc98bd-67aa-4555-9343-56870c1e935a`, duração medida `1.557 ms`.
+- **Entrada (`Ambiguo_Critico`):** *"Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro."*
+- **Decisão esperada no gabarito vs. obtida:** O gabarito previa `Revisao Humana` (razão pela qual a expectativa inicial de roteamento era `82/18`). O Gemini acertou `categoria_glpi = "Software"` e `intencao = "Incidente"`, porém atribuiu `urgencia = "Media"`, `confianca = 0.90` e `requer_revisao_humana = false`, fazendo o gateway `IF` (`confianca >= 0.85 && requer_revisao_humana == false`) direcioná-lo para `Automatico` e deslocando o total do lote para **`83` automáticos e `17` revisões humanas**.
+- **Causa técnica verificada no prompt ([`../prompts/system-prompt-ia.md`](../prompts/system-prompt-ia.md)):** Como o relato indicou inequivocamente tratar-se de falha em aplicativo (`Software` / `Incidente`), não houve ambiguidade entre componentes (hardware/rede/software). Simultaneamente, a expressão *"sistema financeiro"* não figurava literalmente entre os exemplos de criticidade financeira listados no *System Prompt* (que mencionavam *"integração fiscal/faturamento"*, critério que desviou o chamado `2097` com `confianca = 0.75`), e o LLM não interpretou a ausência de código de erro como critério suficiente para ativar `requer_revisao_humana = true`.
+- **Implicação de governança:** O caso comprova que (i) a confiança numérica gerada pelo próprio LLM é uma estimativa probabilística sujeita a excesso de confiança (*overconfidence*) e (ii) restrições de negócio críticas não devem depender apenas de instruções em linguagem natural no prompt, exigindo regras determinísticas complementares no orquestrador (ex.: listas explícitas de palavras-chave críticas e auditoria periódica dos falsos positivos de automação pelo Centro de Excelência).
 
 ---
 
@@ -803,7 +853,8 @@ Todos os números abaixo foram recalculados diretamente pelo script [`../scripts
 def main() -> None:
     tech_config = verify_workflow_and_secrets()
     _, tickets_by_id = load_and_verify_dataset()
-    logs_doc, _, results = load_and_verify_n8n_and_supabase(tickets_by_id)
+    logs_doc, execucoes, results = load_and_verify_n8n_and_supabase(tickets_by_id)
+    hist_meta = verify_n8n_history_parity(execucoes, results)
     log_metrics = recalculate_metrics_from_n8n_logs(logs_doc, tickets_by_id)
     verify_cross_artifact_metrics_parity(log_metrics, results)
     verify_sql_parity(results)
@@ -812,7 +863,13 @@ def main() -> None:
     stats = generate_summary_markdown(tech_config, logs_doc, log_metrics, results, boundary_results)
 
     print("Validação concluída com sucesso!")
-    print("Paridade completa verificada: data/ == logs_execucao_n8n_100.json == resultados_execucao_100 == database/schema.sql (SQLite)")
+    print(
+        "Paridade completa verificada: data/ == historico_execucoes_n8n (112 linhas: "
+        f"{hist_meta['execucoes_lote_principal_sucesso']} lote + "
+        f"{hist_meta['execucoes_smoke_test_inicial']} smoke + "
+        f"{hist_meta['tentativas_transientes_erro_429']} retries 429) == "
+        "logs_execucao_n8n_100.json == resultados_execucao_100 == database/schema.sql (SQLite)"
+    )
     print(f"Total de chamados executados no n8n + Gemini + Supabase: {stats['total']}")
     print(
         f"Padronizados (2001..2080): {stats['pad_cat_acc']}/80 acertos categoriais "

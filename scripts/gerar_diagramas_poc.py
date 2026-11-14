@@ -4,6 +4,7 @@ Gera as figuras atualizadas da Prova de Conceito (PoC) para o TCC e GitHub:
 2. docs/imagens/figura1_bpmn_to_be.png   (Diagrama BPMN página 17 atualizado)
 3. docs/imagens/figura3_tabela_supabase.png (Tabela chamados_triagem coerente com schema.sql)
 4. docs/imagens/diagrama_er_chamados_triagem.png (Diagrama relacional da tabela SQL)
+5. docs/imagens/figura4_historico_execucoes_n8n.png (Histórico completo de execuções do n8n)
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT_DIR = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT_DIR / "docs" / "imagens"
 DATA_JSON = ROOT_DIR / "evidencias" / "resultados_execucao_100.json"
+HIST_JSON = ROOT_DIR / "evidencias" / "historico_execucoes_n8n.json"
 
 FONT_REG = r"C:\Windows\Fonts\segoeui.ttf"
 FONT_BOLD = r"C:\Windows\Fonts\segoeuib.ttf"
@@ -794,12 +796,144 @@ def generate_sql_diagram() -> None:
     img.save(OUT_DIR / "diagrama_er_chamados_triagem.png", quality=95)
 
 
+def generate_n8n_history_screenshot() -> None:
+    """Gera evidência visual do histórico original de execuções do n8n (Executions)."""
+    hist = json.loads(HIST_JSON.read_text(encoding="utf-8"))
+    by_eid = {r["n8n_execution_id"]: r for r in hist["historico_execucoes"]}
+    selected_eids = [1, 2, 3, 4, 27, 28, 90, 91, 94, 95, 100, 101, 102, 111, 112]
+    rows = [by_eid[eid] for eid in selected_eids]
+
+    cols = [
+        ("exec_id", "int4", 82),
+        ("status", "n8n", 94),
+        ("papel_execucao", "lote / retry", 206),
+        ("startedAt (UTC)", "execution_entity", 214),
+        ("dur_n8n", "ms", 84),
+        ("ticket_id", "int4", 94),
+        ("categoria", "Gemini", 108),
+        ("conf", "score", 72),
+        ("rev_hum", "bool", 86),
+        ("ramo_if", "gateway", 156),
+        ("tokens", "usage", 84),
+        ("httpbin", "POST", 84),
+        ("supabase_id", "uuid", 136),
+        ("tempo_ms", "Supabase", 98),
+    ]
+
+    W = sum(c[2] for c in cols)
+    top_banner = 62
+    hdr_h = 54
+    row_h = 46
+    H = top_banner + hdr_h + row_h * len(rows) + 46
+    img = Image.new("RGB", (W, H), "#ffffff")
+    d = ImageDraw.Draw(img)
+
+    f_title = fnt(FONT_BOLD, 20)
+    f_sub = fnt(FONT_REG, 14)
+    f_hdr = fnt(FONT_BOLD, 15)
+    f_type = fnt(FONT_REG, 12)
+    f_cell = fnt(FONT_REG, 14)
+    f_mono = fnt(FONT_MONO, 13)
+    f_bold = fnt(FONT_BOLD, 14)
+
+    d.rectangle([0, 0, W, top_banner], fill="#0f172a")
+    d.text(
+        (16, 10),
+        "n8n v2.47.7 — Histórico Original de Execuções (Workflow: PoC - Triagem Inteligente GLPI | id: tccPoCTriagemGLPI)",
+        font=f_title,
+        fill="#ffffff",
+    )
+    d.text(
+        (16, 36),
+        "database.sqlite (execution_entity: 112 registros -> 100 lote principal [IDs 2001..2100] + 1 smoke test [id=1] + 11 retentativas HTTP 429 recuperadas)",
+        font=f_sub,
+        fill="#cbd5e1",
+    )
+
+    x = 0
+    d.rectangle([0, top_banner, W, top_banner + hdr_h], fill="#f1f5f9")
+    for name, ctype, cw in cols:
+        d.rectangle([x, top_banner, x + cw, top_banner + hdr_h], outline="#cbd5e1", width=1)
+        d.text((x + 8, top_banner + 8), fit_text(d, name, f_hdr, cw - 14), font=f_hdr, fill="#0f172a")
+        d.text((x + 8, top_banner + 30), ctype, font=f_type, fill="#64748b")
+        x += cw
+
+    for idx, r in enumerate(rows):
+        y1 = top_banner + hdr_h + idx * row_h
+        y2 = y1 + row_h
+        if r["status"] == "error":
+            bg = "#fef2f2"
+        elif r["glpi_ticket_id"] == 2089:
+            bg = "#eff6ff"
+        elif r["ramo_if"] == "Revisao Humana":
+            bg = "#fffbeb"
+        elif r["papel_na_execucao"] == "smoke_test_inicial":
+            bg = "#f8fafc"
+        else:
+            bg = "#ffffff"
+        d.rectangle([0, y1, W, y2], fill=bg)
+
+        papel_lbl = {
+            "smoke_test_inicial": "smoke test inicial",
+            "tentativa_transiente_retry_429": "erro 429 (retry auto)",
+            "lote_principal_100_chamados": "lote principal (N=100)",
+        }[r["papel_na_execucao"]]
+
+        vals = [
+            f"#{r['n8n_execution_id']}",
+            r["status"],
+            papel_lbl,
+            r["startedAt"],
+            f"{r['duracao_execucao_n8n_ms']}",
+            str(r["glpi_ticket_id"]),
+            r["categoria_gemini"] or "—",
+            f"{r['confianca_gemini']:.2f}" if r["confianca_gemini"] is not None else "—",
+            ("true" if r["requer_revisao_humana"] else "false") if r["requer_revisao_humana"] is not None else "—",
+            r["ramo_if"] or "HTTP 429 API",
+            str(r["gemini_total_tokens"]) if r["gemini_total_tokens"] is not None else "—",
+            str(r["httpbin_status"]) if r["httpbin_status"] is not None else "—",
+            (r["supabase_id"][:10] + "...") if r["supabase_id"] else "—",
+            str(r["tempo_processamento_ms"]) if r["tempo_processamento_ms"] is not None else "—",
+        ]
+
+        x = 0
+        for col_idx, ((_, _, cw), val) in enumerate(zip(cols, vals)):
+            d.rectangle([x, y1, x + cw, y2], outline="#e2e8f0", width=1)
+            font_use = f_mono if col_idx in (0, 3, 4, 5, 7, 8, 10, 11, 12, 13) else f_cell
+            color = "#1e293b"
+            if col_idx == 1:
+                color = "#047857" if val == "success" else "#b91c1c"
+                font_use = f_bold
+            elif col_idx == 9 and val == "Automatico":
+                color = "#047857"
+                font_use = f_bold
+            elif col_idx == 9 and val == "Revisao Humana":
+                color = "#b45309"
+                font_use = f_bold
+            elif col_idx == 9 and "429" in val:
+                color = "#b91c1c"
+            txt_fitted = fit_text(d, val, font_use, cw - 14)
+            d.text((x + 8, y1 + (row_h - 16) // 2), txt_fitted, font=font_use, fill=color)
+            x += cw
+
+    fy = top_banner + hdr_h + row_h * len(rows)
+    d.rectangle([0, fy, W, H], fill="#f8fafc", outline="#cbd5e1", width=1)
+    d.text(
+        (16, fy + 14),
+        "Amostra representativa de 15 entre as 112 execuções registradas em historico_execucoes_n8n.csv — destaque azul (#101): chamado 2089 (conf=0,90 -> Automatico).",
+        font=f_sub,
+        fill="#334155",
+    )
+    img.save(OUT_DIR / "figura4_historico_execucoes_n8n.png", quality=95)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     generate_as_is()
     generate_to_be()
     generate_supabase_table_screenshot()
     generate_sql_diagram()
+    generate_n8n_history_screenshot()
     print("Diagramas e evidências visuais gerados em docs/imagens/!")
 
 

@@ -12,18 +12,18 @@
 --    Structured Output Parser e saida HTTP emulada via https://httpbin.org/post.
 -- 3. Origem dos textos de entrada: chamados sinteticos anonimizados (`N = 100`,
 --    sendo 80 padronizados e 20 ambiguos/criticos), processados individualmente
---    pela IA com log completo preservado em `evidencias/logs_execucao_n8n_100.json`.
--- 4. Distincao em relacao a carga SQL sintetica preliminar: a versao inicial
---    continha registros estaticos pre-preenchidos (74/80 = 92,5%, 82 automaticos
---    e 18 revisoes humanas, sem chamada real ao Gemini). Os registros abaixo
---    refletem integralmente a nova bateria executada ao vivo no n8n + Gemini.
--- 5. Indicadores reais recalculados diretamente dos logs desta bateria:
+--    pela IA com log completo preservado em `evidencias/logs_execucao_n8n_100.json`
+--    e rastreabilidade integral das 112 execucoes do SQLite em
+--    `evidencias/historico_execucoes_n8n.csv`.
+-- 4. Indicadores reais recalculados diretamente dos logs desta bateria:
 --    - Acuracia categorial e de intencao nos 80 padronizados: 80/80 (100,0%)
 --    - Acuracia categorial, de intencao e de roteamento global: 99/100 (99,0%)
 --    - Encaminhamento automatico: 83/100 (83,0%)
 --    - Revisao humana (Human-in-the-Loop): 17/100 (17,0%)
 --    - Tempo total medido (webhook ate persistencia Supabase): 151.938 ms no lote,
 --      media 1.519,4 ms (~1,52 s), mediana 1.487,0 ms (min. 1.285 / max. 2.068 ms)
+--    - Divergencia explicada no Chamado 2089 (n8n_execution_id = 101):
+--      Software/Incidente com confianca 0.90 >= 0.85 e requer_revisao_humana = false.
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
