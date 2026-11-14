@@ -8,7 +8,8 @@ Este script:
    e seus gabaritos (`data/gabarito_classificacao_100.csv`).
 3. Audita os 100 logs individuais exportados do n8n (`evidencias/logs_execucao_n8n_100.json`)
    com chamadas reais ao Gemini (`models/gemini-3.5-flash-lite`), saída estruturada JSON,
-   respostas reais `httpbin.org/post` (HTTP 200) e gravações reais no Supabase.
+   respostas reais `httpbin.org/post` (HTTP 200) e gravações reais no Supabase, recalculando
+   diretamente dos logs todos os indicadores (80/80, 99/100, 83/17 e latências por nó).
 4. Valida a paridade 100% entre os 100 registros em `evidencias/resultados_execucao_100.json`,
    `evidencias/resultados_execucao_100.csv`, `evidencias/logs_execucao_n8n_100.json`
    e o snapshot SQL em `database/schema.sql` (executado em SQLite em memória).
@@ -28,7 +29,6 @@ import statistics
 import time
 import urllib.error
 import urllib.request
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -235,9 +235,22 @@ def load_and_verify_n8n_and_supabase(
         assert abs(float(res["confianca_ia"]) - conf) < 1e-6
         assert res["status_processamento"] == expected_status
         assert res["requer_revisao_humana"] == (not auto_expected)
+        assert res["acerto_categoria"] == (res["categoria_sugerida"] == t["categoria_gabarito"])
+        assert res["acerto_intencao"] == (res["intencao_classificada"] == t["intencao_gabarito"])
+        assert res["acerto_roteamento"] == (res["status_processamento"] == t["roteamento_esperado"])
+
         assert csv_r["supabase_id"] == res["supabase_id"]
         assert int(csv_r["n8n_execution_id"]) == int(res["n8n_execution_id"])
+        assert csv_r["categoria_sugerida"] == res["categoria_sugerida"]
+        assert csv_r["intencao_classificada"] == res["intencao_classificada"]
+        assert csv_r["nivel_urgencia"] == res["nivel_urgencia"]
+        assert abs(float(csv_r["confianca_ia"]) - float(res["confianca_ia"])) < 1e-6
         assert csv_r["status_processamento"] == res["status_processamento"]
+        assert csv_r["requer_revisao_humana"] == str(res["requer_revisao_humana"])
+        assert int(csv_r["tempo_processamento_ms"]) == int(res["tempo_processamento_ms"])
+        assert csv_r["acerto_categoria"] == str(res["acerto_categoria"])
+        assert csv_r["acerto_intencao"] == str(res["acerto_intencao"])
+        assert csv_r["acerto_roteamento"] == str(res["acerto_roteamento"])
 
     return logs_doc, execucoes, results
 
@@ -417,53 +430,215 @@ def run_httpbin_boundary_tests(
     return results
 
 
+def _compute_latency_stats(values: list[int]) -> dict[str, Any]:
+    """Calcula estatísticas descritivas (soma, média, mediana, mínimo e máximo) em ms."""
+    return {
+        "count": len(values),
+        "sum_ms": sum(values),
+        "mean_ms": statistics.mean(values),
+        "median_ms": statistics.median(values),
+        "stdev_ms": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "min_ms": min(values),
+        "max_ms": max(values),
+    }
+
+
+def recalculate_metrics_from_n8n_logs(
+    logs_doc: dict[str, Any],
+    tickets_by_id: dict[int, dict[str, Any]],
+) -> dict[str, Any]:
+    """Recalcula todos os indicadores da PoC diretamente de evidencias/logs_execucao_n8n_100.json."""
+    execucoes = sorted(logs_doc["execucoes"], key=lambda e: int(e["glpi_ticket_id"]))
+    assert len(execucoes) == 100
+
+    cats = ["Hardware", "Software", "Redes", "Acessos"]
+    matriz_pad = {g: {p: 0 for p in cats} for g in cats}
+    matriz_tot = {g: {p: 0 for p in cats} for g in cats}
+
+    pad_cat_ok = 0
+    pad_int_ok = 0
+    pad_rout_ok = 0
+    tot_cat_ok = 0
+    tot_int_ok = 0
+    tot_rout_ok = 0
+    auto_count = 0
+    rev_count = 0
+    rev_low = 0
+    rev_crit = 0
+    http_200_count = 0
+
+    e2e_entries: list[tuple[int, int]] = []
+    node_names = [
+        "Webhook GLPI (Novo Chamado)",
+        "Google Gemini Chat Model",
+        "Structured Output Parser",
+        "Agente Cognitivo LLM (Parsing)",
+        "Verifica Confianca (Score >= 0.85)",
+        "Atualiza Chamado no GLPI (API)",
+        "Desvio para Fila Humana (Human-in-the-Loop)",
+        "Registra Auditoria no Supabase",
+    ]
+    node_lat_lists: dict[str, list[int]] = {name: [] for name in node_names}
+
+    prompt_tokens = 0
+    comp_tokens = 0
+    total_tokens = 0
+    divergencias: list[dict[str, Any]] = []
+
+    for ev in execucoes:
+        tid = int(ev["glpi_ticket_id"])
+        t = tickets_by_id[tid]
+        traces = ev["node_traces"]
+
+        parsed = traces["Structured Output Parser"]["parsed_output"]
+        cat_pred = parsed["categoria_glpi"]
+        int_pred = parsed["intencao"]
+        conf = float(parsed["confianca"])
+        rev_flag = bool(parsed["requer_revisao_humana"])
+
+        branch_raw = traces["Verifica Confianca (Score >= 0.85)"]["branch_taken"]
+        if branch_raw == "true (Automatico)":
+            branch_taken = True
+        elif branch_raw == "false (Revisao Humana)":
+            branch_taken = False
+        else:
+            raise AssertionError(f"Valor inesperado em branch_taken: {branch_raw!r}")
+        assert branch_taken == ((conf >= 0.85) and (not rev_flag))
+        status_pred = "Automatico" if branch_taken else "Revisao Humana"
+
+        http_node_name = (
+            "Atualiza Chamado no GLPI (API)"
+            if branch_taken
+            else "Desvio para Fila Humana (Human-in-the-Loop)"
+        )
+        if traces[http_node_name]["httpbin_status"] == 200:
+            http_200_count += 1
+
+        if status_pred == "Automatico":
+            auto_count += 1
+        else:
+            rev_count += 1
+            if conf < 0.85:
+                rev_low += 1
+            else:
+                rev_crit += 1
+
+        cat_gab = t["categoria_gabarito"]
+        int_gab = t["intencao_gabarito"]
+        rout_gab = t["roteamento_esperado"]
+
+        matriz_tot[cat_gab][cat_pred] += 1
+        if t["tipo_cenario"] == "Padronizado":
+            matriz_pad[cat_gab][cat_pred] += 1
+            if cat_pred == cat_gab:
+                pad_cat_ok += 1
+            if int_pred == int_gab:
+                pad_int_ok += 1
+            if status_pred == rout_gab:
+                pad_rout_ok += 1
+
+        if cat_pred == cat_gab:
+            tot_cat_ok += 1
+        if int_pred == int_gab:
+            tot_int_ok += 1
+        if status_pred == rout_gab:
+            tot_rout_ok += 1
+
+        if cat_pred != cat_gab or int_pred != int_gab or status_pred != rout_gab:
+            divergencias.append(
+                {
+                    "glpi_ticket_id": tid,
+                    "n8n_execution_id": int(ev["n8n_execution_id"]),
+                    "conteudo_original": t["conteudo_original"],
+                    "gabarito": f"{cat_gab} / {int_gab} / {rout_gab}",
+                    "predicao": f"{cat_pred} / {int_pred} / {status_pred}",
+                    "confianca": conf,
+                }
+            )
+
+        sb_trace = traces["Registra Auditoria no Supabase"]
+        e2e_entries.append((int(sb_trace["tempo_processamento_ms"]), tid))
+
+        gem = traces["Google Gemini Chat Model"]
+        prompt_tokens += int(gem["tokenUsage"]["promptTokens"])
+        comp_tokens += int(gem["tokenUsage"]["completionTokens"])
+        total_tokens += int(gem["tokenUsage"]["totalTokens"])
+
+        for name in node_names:
+            if name in traces:
+                node_lat_lists[name].append(int(traces[name]["executionTime_ms"]))
+
+    e2e_values = [ms for ms, _ in e2e_entries]
+    e2e_stats = _compute_latency_stats(e2e_values)
+    min_ms, min_tid = min(e2e_entries, key=lambda x: x[0])
+    max_ms, max_tid = max(e2e_entries, key=lambda x: x[0])
+    e2e_stats["min_ticket_id"] = min_tid
+    e2e_stats["max_ticket_id"] = max_tid
+
+    node_latencies = {name: _compute_latency_stats(vals) for name, vals in node_lat_lists.items()}
+
+    return {
+        "total": len(execucoes),
+        "pad_total": 80,
+        "amb_total": 20,
+        "pad_cat_acc": pad_cat_ok,
+        "pad_int_acc": pad_int_ok,
+        "pad_rout_acc": pad_rout_ok,
+        "tot_cat_acc": tot_cat_ok,
+        "tot_int_acc": tot_int_ok,
+        "rout_acc": tot_rout_ok,
+        "auto": auto_count,
+        "rev": rev_count,
+        "rev_low": rev_low,
+        "rev_crit": rev_crit,
+        "http_200_count": http_200_count,
+        "e2e_stats": e2e_stats,
+        "mean_e2e_ms": e2e_stats["mean_ms"],
+        "median_e2e_ms": e2e_stats["median_ms"],
+        "mean_gem_ms": node_latencies["Google Gemini Chat Model"]["mean_ms"],
+        "node_latencies": node_latencies,
+        "prompt_tokens": prompt_tokens,
+        "comp_tokens": comp_tokens,
+        "total_tokens": total_tokens,
+        "retries_429": logs_doc["metadados_execucao"].get("tentativas_transientes_retry_429", 0),
+        "matriz_pad": matriz_pad,
+        "matriz_tot": matriz_tot,
+        "divergencias": divergencias,
+    }
+
+
+def verify_cross_artifact_metrics_parity(
+    log_metrics: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> None:
+    """Confere que os indicadores recalculados dos logs do n8n batem 100% com JSON/CSV do Supabase."""
+    pad = [r for r in results if r["tipo_cenario"] == "Padronizado"]
+    assert len(results) == log_metrics["total"] == 100
+    assert len(pad) == log_metrics["pad_total"] == 80
+    assert sum(1 for r in pad if r["acerto_categoria"]) == log_metrics["pad_cat_acc"] == 80
+    assert sum(1 for r in pad if r["acerto_intencao"]) == log_metrics["pad_int_acc"] == 80
+    assert sum(1 for r in pad if r["acerto_roteamento"]) == log_metrics["pad_rout_acc"] == 80
+    assert sum(1 for r in results if r["acerto_categoria"]) == log_metrics["tot_cat_acc"] == 99
+    assert sum(1 for r in results if r["acerto_intencao"]) == log_metrics["tot_int_acc"] == 99
+    assert sum(1 for r in results if r["acerto_roteamento"]) == log_metrics["rout_acc"] == 99
+    assert sum(1 for r in results if r["status_processamento"] == "Automatico") == log_metrics["auto"] == 83
+    assert sum(1 for r in results if r["status_processamento"] == "Revisao Humana") == log_metrics["rev"] == 17
+    assert sum(int(r["tempo_processamento_ms"]) for r in results) == log_metrics["e2e_stats"]["sum_ms"]
+    assert abs(statistics.mean(int(r["tempo_processamento_ms"]) for r in results) - log_metrics["mean_e2e_ms"]) < 1e-9
+    assert abs(statistics.median(int(r["tempo_processamento_ms"]) for r in results) - log_metrics["median_e2e_ms"]) < 1e-9
+
+
 def generate_summary_markdown(
     tech_config: dict[str, Any],
     logs_doc: dict[str, Any],
-    execucoes: list[dict[str, Any]],
+    log_metrics: dict[str, Any],
     results: list[dict[str, Any]],
     boundary_results: list[dict[str, Any]],
 ) -> dict[str, Any]:
     results = sorted(results, key=lambda r: int(r["glpi_ticket_id"]))
-    padronizados = [r for r in results if r["tipo_cenario"] == "Padronizado"]
-    ambiguos = [r for r in results if r["tipo_cenario"] == "Ambiguo_Critico"]
-
-    acertos_pad_cat = [r for r in padronizados if r["categoria_sugerida"] == r["categoria_gabarito"]]
-    acertos_pad_int = [r for r in padronizados if r["intencao_classificada"] == r["intencao_gabarito"]]
-    acertos_tot_cat = [r for r in results if r["categoria_sugerida"] == r["categoria_gabarito"]]
-    acertos_tot_int = [r for r in results if r["intencao_classificada"] == r["intencao_gabarito"]]
-    acertos_rout = [r for r in results if r["status_processamento"] == r["roteamento_esperado"]]
-
-    automaticos = [r for r in results if r["status_processamento"] == "Automatico"]
-    revisao = [r for r in results if r["status_processamento"] == "Revisao Humana"]
-    rev_low_conf = [r for r in revisao if float(r["confianca_ia"]) < 0.85]
-    rev_crit_high = [r for r in revisao if float(r["confianca_ia"]) >= 0.85]
-
-    lat_e2e = [int(r["tempo_processamento_ms"]) for r in results]
-    mean_e2e = statistics.mean(lat_e2e)
-    median_e2e = statistics.median(lat_e2e)
-    min_rec = min(results, key=lambda r: int(r["tempo_processamento_ms"]))
-    max_rec = max(results, key=lambda r: int(r["tempo_processamento_ms"]))
-
-    gem_nodes = [e["node_traces"]["Google Gemini Chat Model"] for e in execucoes]
-    gem_lat = [int(g["executionTime_ms"]) for g in gem_nodes]
-    mean_gem = statistics.mean(gem_lat)
-    median_gem = statistics.median(gem_lat)
-    min_gem, max_gem = min(gem_lat), max(gem_lat)
-
-    prompt_tokens = sum(int(g["tokenUsage"]["promptTokens"]) for g in gem_nodes)
-    comp_tokens = sum(int(g["tokenUsage"]["completionTokens"]) for g in gem_nodes)
-    total_tokens = sum(int(g["tokenUsage"]["totalTokens"]) for g in gem_nodes)
-    retries_429 = logs_doc["metadados_execucao"].get("tentativas_transientes_retry_429", 0)
-
     cats = ["Hardware", "Software", "Redes", "Acessos"]
-    matriz_pad = {g: {p: 0 for p in cats} for g in cats}
-    for r in padronizados:
-        matriz_pad[r["categoria_gabarito"]][r["categoria_sugerida"]] += 1
-
-    matriz_tot = {g: {p: 0 for p in cats} for g in cats}
-    for r in results:
-        matriz_tot[r["categoria_gabarito"]][r["categoria_sugerida"]] += 1
+    matriz_pad = log_metrics["matriz_pad"]
+    matriz_tot = log_metrics["matriz_tot"]
 
     linhas_m_pad = "\n".join(
         f"| **{g}** | {matriz_pad[g]['Hardware']} | {matriz_pad[g]['Software']} | {matriz_pad[g]['Redes']} | {matriz_pad[g]['Acessos']} | {sum(matriz_pad[g].values())} |"
@@ -474,21 +649,31 @@ def generate_summary_markdown(
         for g in cats
     )
 
-    div_rows = [
-        r
-        for r in results
-        if (
-            r["categoria_sugerida"] != r["categoria_gabarito"]
-            or r["intencao_classificada"] != r["intencao_gabarito"]
-            or r["status_processamento"] != r["roteamento_esperado"]
-        )
-    ]
     linhas_div = "\n".join(
-        f"| {r['glpi_ticket_id']} | {r['n8n_execution_id']} | {r['conteudo_original']} | "
-        f"{r['categoria_gabarito']} / {r['intencao_gabarito']} / {r['roteamento_esperado']} | "
-        f"{r['categoria_sugerida']} / {r['intencao_classificada']} / {r['status_processamento']} | "
-        f"{r['confianca_ia']:.2f} |"
-        for r in div_rows
+        f"| {d['glpi_ticket_id']} | {d['n8n_execution_id']} | {d['conteudo_original']} | "
+        f"{d['gabarito']} | {d['predicao']} | {d['confianca']:.2f} |"
+        for d in log_metrics["divergencias"]
+    )
+
+    e2e = log_metrics["e2e_stats"]
+    gem_stats = log_metrics["node_latencies"]["Google Gemini Chat Model"]
+
+    node_order = [
+        ("Webhook GLPI (Novo Chamado)", "Recepção HTTP POST"),
+        ("Google Gemini Chat Model", "Inferência LLM (`models/gemini-3.5-flash-lite`)"),
+        ("Structured Output Parser", "Validação JSON Schema"),
+        ("Agente Cognitivo LLM (Parsing)", "Nó agente composto (Gemini + Parser)"),
+        ("Verifica Confianca (Score >= 0.85)", "Gateway condicional (`IF`)"),
+        ("Atualiza Chamado no GLPI (API)", "Ramo Automático -> `httpbin.org/post`"),
+        ("Desvio para Fila Humana (Human-in-the-Loop)", "Ramo HITL -> `httpbin.org/post`"),
+        ("Registra Auditoria no Supabase", "Persistência REST PostgreSQL"),
+    ]
+    linhas_nodes = "\n".join(
+        f"| `{name}` | {desc} | {log_metrics['node_latencies'][name]['count']} | "
+        f"{log_metrics['node_latencies'][name]['mean_ms']:.2f} ms | "
+        f"{log_metrics['node_latencies'][name]['median_ms']:.1f} ms | "
+        f"{log_metrics['node_latencies'][name]['min_ms']}–{log_metrics['node_latencies'][name]['max_ms']} ms |"
+        for name, desc in node_order
     )
 
     by_id = {int(r["glpi_ticket_id"]): r for r in results}
@@ -508,15 +693,27 @@ def generate_summary_markdown(
         for b in boundary_results
     )
 
-    resumo_md = f"""# Resumo de Conferência e Cálculo dos Indicadores Reais da PoC
+    resumo_md = f"""# Resumo de Conferência e Recálculo Direto dos Indicadores da PoC
 
 ## 1. Origem das Evidências e Separação de Camadas (`N = 100`)
 Todos os 100 chamados sintéticos foram executados ao vivo pelo fluxo no **n8n v{logs_doc['metadados_execucao']['n8n_versao']}** (`workflow_id = {tech_config['workflow_id']}`), processados individualmente pelo modelo **Google Gemini (`{tech_config['gemini_model']}`, `temperature = {tech_config['temperature']}`)** com **Structured Output Parser**, encaminhados via **`{tech_config['http_auto_url']}`** (emulando saída GLPI / fila humana sem instância produtiva) e persistidos no **Supabase (`chamados_triagem`)**:
 
 1. **Entrada e Gabarito Sintético ([`../data/chamados_sinteticos_100.json`](../data/chamados_sinteticos_100.json), [`../data/gabarito_classificacao_100.csv`](../data/gabarito_classificacao_100.csv)):** 100 chamados fictícios anonimizados (25 Hardware, 25 Software, 25 Redes e 25 Acessos; 80 padronizados `2001..2080` e 20 ambíguos/críticos `2081..2100`).
 2. **Logs Individuais das 100 Execuções no n8n ([`logs_execucao_n8n_100.json`](logs_execucao_n8n_100.json)):** rastreamento completo nó a nó de cada uma das 100 execuções (`n8n_execution_id` com `status = "success"`), comprovando entrada do Webhook, latência e consumo de tokens do `Google Gemini Chat Model`, JSON estruturado do `Structured Output Parser`, ramo do nó `IF`, eco HTTP 200 de `https://httpbin.org/post` e UUID gravado no Supabase.
-3. **Registros Reais Persistidos no Supabase ([`resultados_execucao_100.json`](resultados_execucao_100.json), [`resultados_execucao_100.csv`](resultados_execucao_100.csv) e [`../database/schema.sql`](../database/schema.sql)):** espelho exato das 100 linhas gravadas no banco Supabase pelo nó `Registra Auditoria no Supabase`, preservando UUIDs, timestamps UTC, respostas sugeridas geradas pelo LLM e `tempo_processamento_ms` medido em tempo real.
+3. **Registros Reais Persistidos no Supabase ([`resultados_execucao_100.json`](resultados_execucao_100.json), [`resultados_execucao_100.csv`](resultados_execucao_100.csv) e [`../database/schema.sql`](../database/schema.sql)):** espelho exato das 100 linhas gravadas no banco Supabase pelo nó `Registra Auditoria no Supabase`, preservando UUIDs, timestamps UTC, respostas sugeridas geradas pelo LLM, sinalizadores individuais de acerto (`acerto_categoria`, `acerto_intencao`, `acerto_roteamento`) e `tempo_processamento_ms` medido em tempo real.
 4. **Testes Controlados de Valor-Limite via Python ([`testes_valor_limite_httpbin.json`](testes_valor_limite_httpbin.json)):** requisições `HTTP POST` disparadas diretamente por [`../scripts/validar_poc.py`](../scripts/validar_poc.py) para `https://httpbin.org/post` avaliando exatamente os escores de fronteira `0.84`, `0.85`, `0.86` e `0.92` (`executado_no_n8n = false`, `inferencia_gemini_real = false`), complementando as execuções ao vivo do Gemini (que retornou escores em múltiplos de `0.05`: `0.50`, `0.65`, `0.70`, `0.75`, `0.80`, `0.90`, `0.95`, `1.00`).
+
+### 1.1 Distinção Metodológica: Carga SQL Sintética Inicial vs. Nova Bateria Ao Vivo no n8n
+Para rastreabilidade completa da evolução do repositório e do TCC, documenta-se explicitamente a diferença entre os dados estáticos iniciais e a bateria real executada no n8n:
+
+| Aspecto Avaliado | Carga Sintética Inicial em SQL *(superada)* | Nova Bateria Ao Vivo (`n8n + Gemini + Supabase`) *(atual)* |
+| :--- | :--- | :--- |
+| **Origem dos registros** | `INSERT` estático pré-preenchido em SQL, sem chamadas reais ao Gemini | 100 execuções ao vivo no `n8n` (`evidencias/logs_execucao_n8n_100.json`) persistidas no Supabase |
+| **Acurácia nos 80 padronizados** | `74 / 80` (`92,5%`) predeterminada no seed | **`80 / 80` (`100,0%`)** em categoria e intenção (recalculado dos logs) |
+| **Acurácia categorial global (`N = 100`)** | Derivada dos rótulos sintéticos do seed | **`99 / 100` (`99,0%`)** em categoria, intenção e roteamento |
+| **Distribuição de encaminhamento** | `82` automáticos / `18` revisões humanas | **`83` automáticos (`83,0%`) / `17` revisões humanas (`17,0%`)** (`8` `< 0.85` + `9` críticos) |
+| **Tempo de processamento** | `NULL` no SQL / placeholder preliminar (`1.900 ms`) no workflow | **`1.519,4 ms`** médios efetivamente medidos (`151.938 ms` no lote; mediana `1.487,0 ms`) |
+| **Escopo da avaliação** | Ilustração estática sem rastreamento nó a nó | Avaliação técnica controlada da própria PoC (sem comparação empírica com atendimento humano real) |
 
 ---
 
@@ -527,39 +724,48 @@ Todos os 100 chamados sintéticos foram executados ao vivo pelo fluxo no **n8n v
 - **Parser JSON:** `{tech_config['parser_type']}`
 - **Limiar do gateway IF:** `confianca >= {tech_config['if_threshold']}` AND `requer_revisao_humana == false`
 - **Expressão `tempo_processamento_ms`:** `{tech_config['tempo_expr']}` (medição real em ms sem fallback artificial)
-- **Endpoints HTTP emulados:** `{tech_config['http_auto_url']}` (automático e revisão humana; 100/100 retornaram HTTP 200)
+- **Endpoints HTTP emulados:** `{tech_config['http_auto_url']}` (automático e revisão humana; {log_metrics['http_200_count']}/100 retornaram HTTP 200)
 - **Varredura de segredos/tokens:** Limpa (`secret_scan_clean = {tech_config['secret_scan_clean']}`)
 
 ---
 
-## 3. Indicadores Reais Medidos na Execução n8n + Gemini + Supabase (`N = 100`)
+## 3. Indicadores Recalculados Diretamente dos Logs do n8n (`N = 100`)
+Todos os números abaixo foram recalculados diretamente pelo script [`../scripts/validar_poc.py`](../scripts/validar_poc.py) a partir dos `node_traces` individuais de [`logs_execucao_n8n_100.json`](logs_execucao_n8n_100.json) e conferidos com 100% de paridade contra `resultados_execucao_100.json`, `resultados_execucao_100.csv` e `database/schema.sql`:
 
-| Indicador | Critério / Fonte Real (`logs_execucao_n8n_100.json` + Supabase) | Valor Obtido |
+| Indicador | Critério / Fórmula Direta sobre `logs_execucao_n8n_100.json` | Resultado Recalculado |
 | :--- | :--- | :--- |
 | Chamados sintéticos processados | Execuções `status = success` no n8n e linhas no Supabase | **100 de 100 (100,0%)** |
-| Acurácia categorial (padronizados) | `categoria_sugerida == categoria_gabarito` em `2001..2080` | **{len(acertos_pad_cat)} de {len(padronizados)} ({len(acertos_pad_cat)/len(padronizados)*100:.1f}%)** |
-| Acurácia de intenção (padronizados) | `intencao_classificada == intencao_gabarito` em `2001..2080` | **{len(acertos_pad_int)} de {len(padronizados)} ({len(acertos_pad_int)/len(padronizados)*100:.1f}%)** |
-| Acurácia categorial global (`N = 100`) | `categoria_sugerida == categoria_gabarito` em `2001..2100` | **{len(acertos_tot_cat)} de 100 ({len(acertos_tot_cat):.1f}%)** |
-| Acurácia de intenção global (`N = 100`) | `intencao_classificada == intencao_gabarito` em `2001..2100` | **{len(acertos_tot_int)} de 100 ({len(acertos_tot_int):.1f}%)** |
-| Concordância de roteamento com gabarito | `status_processamento == roteamento_esperado` em `2001..2100` | **{len(acertos_rout)} de 100 ({len(acertos_rout):.1f}%)** |
-| Encaminhamento automático | `confianca_ia >= 0.85` e `requer_revisao_humana = false` | **{len(automaticos)} de 100 ({len(automaticos):.1f}%)** |
-| Encaminhamento para revisão humana | `confianca_ia < 0.85` ({len(rev_low_conf)}) ou revisão crítica obrigatória ({len(rev_crit_high)}) | **{len(revisao)} de 100 ({len(revisao):.1f}%)** |
-| Tempo total medido (Webhook -> Supabase) | Média / Mediana / Mín.–Máx. (`tempo_processamento_ms`) | **{mean_e2e:.1f} ms (~{mean_e2e/1000:.2f} s)** / Mediana **{median_e2e:.1f} ms** ({min_rec['tempo_processamento_ms']}–{max_rec['tempo_processamento_ms']} ms) |
-| Latência isolada do nó Gemini Chat Model | Média / Mediana / Mín.–Máx. (`logs_execucao_n8n_100.json`) | **{mean_gem:.1f} ms** / Mediana **{median_gem:.1f} ms** ({min_gem}–{max_gem} ms) |
-| Consumo de tokens na amostra (`N = 100`) | Soma real dos 100 logs Gemini (`prompt` + `completion`) | **{total_tokens:,}** tokens ({prompt_tokens:,} prompt + {comp_tokens:,} saída; média **{total_tokens/100:.1f}**/chamado) |
-| Retentativas transientes (HTTP 429 API) | Reenvios automáticos com *backoff* no lote de 100 disparos | **{retries_429}** retentativas transientes (100% concluídos com sucesso) |
+| Acurácia categorial (padronizados) | `categoria_glpi == categoria_gabarito` em `2001..2080` | **{log_metrics['pad_cat_acc']} de 80 ({log_metrics['pad_cat_acc']/80*100:.1f}%)** |
+| Acurácia de intenção (padronizados) | `intencao == intencao_gabarito` em `2001..2080` | **{log_metrics['pad_int_acc']} de 80 ({log_metrics['pad_int_acc']/80*100:.1f}%)** |
+| Acurácia categorial global (`N = 100`) | `categoria_glpi == categoria_gabarito` em `2001..2100` | **{log_metrics['tot_cat_acc']} de 100 ({log_metrics['tot_cat_acc']:.1f}%)** |
+| Acurácia de intenção global (`N = 100`) | `intencao == intencao_gabarito` em `2001..2100` | **{log_metrics['tot_int_acc']} de 100 ({log_metrics['tot_int_acc']:.1f}%)** |
+| Concordância de roteamento global | Ramo executado no nó `IF` == `roteamento_esperado` em `2001..2100` | **{log_metrics['rout_acc']} de 100 ({log_metrics['rout_acc']:.1f}%)** |
+| Encaminhamento automático | Ramo `branch_taken = true` (`confianca >= 0.85` e `requer_revisao_humana = false`) | **{log_metrics['auto']} de 100 ({log_metrics['auto']:.1f}%)** |
+| Encaminhamento para revisão humana | Ramo `branch_taken = false` (`{log_metrics['rev_low']}` com confiança `< 0.85` + `{log_metrics['rev_crit']}` críticos `>= 0.85`) | **{log_metrics['rev']} de 100 ({log_metrics['rev']:.1f}%)** |
+| Soma e média de `tempo_processamento_ms` | Soma = `{e2e['sum_ms']:,} ms` / Média = `{e2e['sum_ms']}/100` | **{e2e['mean_ms']:.2f} ms ({e2e['mean_ms']:.1f} ms / ~{e2e['mean_ms']/1000:.2f} s)** |
+| Mediana, desvio padrão e amplitude | Valores reais de `tempo_processamento_ms` no nó Supabase | Mediana **{e2e['median_ms']:.1f} ms** / DP **{e2e['stdev_ms']:.2f} ms** / **{e2e['min_ms']}** (ID `{e2e['min_ticket_id']}`)–**{e2e['max_ms']} ms** (ID `{e2e['max_ticket_id']}`) |
+| Latência isolada do nó Gemini Chat Model | `executionTime_ms` acumulado = `{gem_stats['sum_ms']:,} ms` | **{gem_stats['mean_ms']:.2f} ms** / Mediana **{gem_stats['median_ms']:.1f} ms** ({gem_stats['min_ms']}–{gem_stats['max_ms']} ms) |
+| Consumo total de tokens (`N = 100`) | Soma direta de `tokenUsage` (`promptTokens + completionTokens`) | **{log_metrics['total_tokens']:,}** tokens ({log_metrics['prompt_tokens']:,} prompt + {log_metrics['comp_tokens']:,} saída; média **{log_metrics['total_tokens']/100:.1f}**/chamado) |
+| Retentativas transientes (`HTTP 429`) | Contagem registrada na coleta da API gratuita do Gemini | **{log_metrics['retries_429']}** retentativas transientes (100% concluídos com sucesso) |
+
+### 3.1 Decomposição da Latência por Nó do Fluxo (`node_traces`)
+
+| Nó do Workflow (`n8n`) | Função na Esteira | Execuções | Média | Mediana | Mín.–Máx. |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+{linhas_nodes}
+| **Total ponta a ponta medido (`tempo_processamento_ms`)** | `Date.now() - timestamp_inicio_ms` gravado no Supabase | **100** | **{e2e['mean_ms']:.2f} ms** | **{e2e['median_ms']:.1f} ms** | **{e2e['min_ms']}–{e2e['max_ms']} ms** |
 
 ---
 
 ## 4. Matrizes de Confusão Reais (`Google Gemini` vs. Gabarito)
 
-### 4.1 Subconjunto Padronizado (`2001..2080`, `N = 80`) — {len(acertos_pad_cat)}/80 ({len(acertos_pad_cat)/80*100:.1f}%)
+### 4.1 Subconjunto Padronizado (`2001..2080`, `N = 80`) — {log_metrics['pad_cat_acc']}/80 ({log_metrics['pad_cat_acc']/80*100:.1f}%)
 
 | Gabarito \\ Predição Gemini | Hardware | Software | Redes | Acessos | Total Gabarito |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 {linhas_m_pad}
 
-### 4.2 Amostra Completa (`2001..2100`, `N = 100`) — {len(acertos_tot_cat)}/100 ({len(acertos_tot_cat):.1f}%)
+### 4.2 Amostra Completa (`2001..2100`, `N = 100`) — {log_metrics['tot_cat_acc']}/100 ({log_metrics['tot_cat_acc']:.1f}%)
 
 | Gabarito \\ Predição Gemini | Hardware | Software | Redes | Acessos | Total Gabarito |
 | :--- | :---: | :---: | :---: | :---: | :---: |
@@ -591,33 +797,19 @@ Todos os 100 chamados sintéticos foram executados ao vivo pelo fluxo no **n8n v
 {linhas_limite}
 """
     (EVIDENCIAS_DIR / "resumo_indicadores.md").write_text(resumo_md, encoding="utf-8")
-
-    return {
-        "total": len(results),
-        "pad_cat_acc": len(acertos_pad_cat),
-        "pad_int_acc": len(acertos_pad_int),
-        "tot_cat_acc": len(acertos_tot_cat),
-        "tot_int_acc": len(acertos_tot_int),
-        "rout_acc": len(acertos_rout),
-        "auto": len(automaticos),
-        "rev": len(revisao),
-        "rev_low": len(rev_low_conf),
-        "rev_crit": len(rev_crit_high),
-        "mean_e2e_ms": mean_e2e,
-        "median_e2e_ms": median_e2e,
-        "mean_gem_ms": mean_gem,
-        "total_tokens": total_tokens,
-    }
+    return log_metrics
 
 
 def main() -> None:
     tech_config = verify_workflow_and_secrets()
     _, tickets_by_id = load_and_verify_dataset()
-    logs_doc, execucoes, results = load_and_verify_n8n_and_supabase(tickets_by_id)
+    logs_doc, _, results = load_and_verify_n8n_and_supabase(tickets_by_id)
+    log_metrics = recalculate_metrics_from_n8n_logs(logs_doc, tickets_by_id)
+    verify_cross_artifact_metrics_parity(log_metrics, results)
     verify_sql_parity(results)
     results_by_id = {int(r["glpi_ticket_id"]): r for r in results}
     boundary_results = run_httpbin_boundary_tests(tickets_by_id, results_by_id)
-    stats = generate_summary_markdown(tech_config, logs_doc, execucoes, results, boundary_results)
+    stats = generate_summary_markdown(tech_config, logs_doc, log_metrics, results, boundary_results)
 
     print("Validação concluída com sucesso!")
     print("Paridade completa verificada: data/ == logs_execucao_n8n_100.json == resultados_execucao_100 == database/schema.sql (SQLite)")
@@ -628,15 +820,15 @@ def main() -> None:
     )
     print(
         f"Global (2001..2100): {stats['tot_cat_acc']}/100 categoria ({stats['tot_cat_acc']}%) | "
-        f"{stats['rout_acc']}/100 concordância de roteamento"
+        f"{stats['tot_int_acc']}/100 intenção | {stats['rout_acc']}/100 concordância de roteamento"
     )
     print(
         f"Encaminhamentos -> Automatico: {stats['auto']} | Revisao Humana: {stats['rev']} "
         f"({stats['rev_low']} confiança < 0.85 + {stats['rev_crit']} críticos >= 0.85)"
     )
     print(
-        f"Tempo médio e2e medido: {stats['mean_e2e_ms']:.1f} ms (mediana {stats['median_e2e_ms']:.1f} ms) | "
-        f"Nó Gemini: {stats['mean_gem_ms']:.1f} ms | Tokens totais: {stats['total_tokens']:,}"
+        f"Tempo médio e2e medido: {stats['mean_e2e_ms']:.2f} ms (mediana {stats['median_e2e_ms']:.1f} ms) | "
+        f"Nó Gemini: {stats['mean_gem_ms']:.2f} ms | Tokens totais: {stats['total_tokens']:,}"
     )
     for b in boundary_results:
         print(

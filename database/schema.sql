@@ -13,12 +13,17 @@
 -- 3. Origem dos textos de entrada: chamados sinteticos anonimizados (`N = 100`,
 --    sendo 80 padronizados e 20 ambiguos/criticos), processados individualmente
 --    pela IA com log completo preservado em `evidencias/logs_execucao_n8n_100.json`.
--- 4. Indicadores reais apurados nesta carga:
+-- 4. Distincao em relacao a carga SQL sintetica preliminar: a versao inicial
+--    continha registros estaticos pre-preenchidos (74/80 = 92,5%, 82 automaticos
+--    e 18 revisoes humanas, sem chamada real ao Gemini). Os registros abaixo
+--    refletem integralmente a nova bateria executada ao vivo no n8n + Gemini.
+-- 5. Indicadores reais recalculados diretamente dos logs desta bateria:
 --    - Acuracia categorial e de intencao nos 80 padronizados: 80/80 (100,0%)
---    - Acuracia categorial global nos 100 chamados: 99/100 (99,0%)
+--    - Acuracia categorial, de intencao e de roteamento global: 99/100 (99,0%)
 --    - Encaminhamento automatico: 83/100 (83,0%)
 --    - Revisao humana (Human-in-the-Loop): 17/100 (17,0%)
---    - Tempo medio efetivo medido (webhook ate persistencia Supabase): 1.519,4 ms
+--    - Tempo total medido (webhook ate persistencia Supabase): 151.938 ms no lote,
+--      media 1.519,4 ms (~1,52 s), mediana 1.487,0 ms (min. 1.285 / max. 2.068 ms)
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";

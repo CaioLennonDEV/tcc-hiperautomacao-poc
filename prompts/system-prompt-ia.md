@@ -58,15 +58,15 @@ Os payloads abaixo e os logs das requisições `HTTP POST` disparadas **diretame
     "input": {
       "ticket_id": 2080,
       "user_email": "patricia.gomes@empresa.com",
-      "ticket_title": "Solicitação de acesso ao ERP",
-      "ticket_description": "Novo colaborador do financeiro precisa de perfil de leitura."
+      "ticket_title": "Monitor não liga",
+      "ticket_description": "Cabo de energia testado na tomada, mas o LED não acende."
     },
     "output_parser": {
-      "intencao": "Solicitacao",
-      "urgencia": "Baixa",
-      "categoria_glpi": "Acessos",
+      "intencao": "Incidente",
+      "urgencia": "Media",
+      "categoria_glpi": "Hardware",
       "confianca": 0.86,
-      "resumo_demanda": "Solicitação de perfil de leitura no ERP para novo colaborador do setor financeiro.",
+      "resumo_demanda": "Monitor não liga após teste de cabo na tomada (LED apagado).",
       "resposta_sugerida": "Prezado(a), sua solicitação foi triada automaticamente e encaminhada para atendimento conforme procedimento padrão.",
       "requer_revisao_humana": false
     },

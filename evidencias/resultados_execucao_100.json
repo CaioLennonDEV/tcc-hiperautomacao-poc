@@ -19,6 +19,8 @@
     "tempo_processamento_ms": 1627,
     "resposta_sugerida": "Olá Carlos, sua solicitação de desbloqueio e redefinição de senha de rede foi registrada com sucesso e encaminhada para a equipe de Acessos.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -41,6 +43,8 @@
     "tempo_processamento_ms": 1537,
     "resposta_sugerida": "Olá, Mariana. Sua solicitação de perfil de leitura no ERP foi recebida e encaminhada para a equipe de Acessos. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -63,6 +67,8 @@
     "tempo_processamento_ms": 1814,
     "resposta_sugerida": "Olá, João. Recebemos sua solicitação sobre o monitor que não liga. O chamado foi classificado como Incidente de Hardware e encaminhado para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -85,6 +91,8 @@
     "tempo_processamento_ms": 1454,
     "resposta_sugerida": "Olá Fernanda, sua solicitação referente à desconexão da VPN foi registrada como Incidente de Redes e encaminhada para a equipe técnica analisar. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -107,6 +115,8 @@
     "tempo_processamento_ms": 1417,
     "resposta_sugerida": "Olá Ricardo, sua solicitação de instalação do pacote Office foi registrada e encaminhada para a equipe de suporte. Entraremos em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -129,6 +139,8 @@
     "tempo_processamento_ms": 1395,
     "resposta_sugerida": "Olá Juliana, recebemos o seu chamado referente à impressora do 2º andar com falha de atolamento de papel. Sua solicitação foi direcionada para a equipe de suporte de Hardware e será analisada em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -151,6 +163,8 @@
     "tempo_processamento_ms": 1372,
     "resposta_sugerida": "Olá Lucas, sua solicitação de atualização do navegador corporativo (Chrome) foi recebida e encaminhada para a equipe de suporte. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -173,6 +187,8 @@
     "tempo_processamento_ms": 1361,
     "resposta_sugerida": "Olá, Patrícia! Recebemos o seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua demanda foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -195,6 +211,8 @@
     "tempo_processamento_ms": 1517,
     "resposta_sugerida": "Olá, Ana! Recebemos sua solicitação para instalação do pacote Office (Excel e Word) na estação 14. Seu chamado foi categorizado e encaminhado para a equipe de suporte de Software. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -217,6 +235,8 @@
     "tempo_processamento_ms": 1486,
     "resposta_sugerida": "Olá Carlos, sua solicitação referente à VPN desconectando foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe de suporte técnico analisar. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -239,6 +259,8 @@
     "tempo_processamento_ms": 1430,
     "resposta_sugerida": "Olá, Mariana. Sua solicitação de desbloqueio de senha de rede foi recebida e encaminhada para a equipe de suporte. Em breve você receberá instruções para o redefinição de acesso.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -261,6 +283,8 @@
     "tempo_processamento_ms": 1385,
     "resposta_sugerida": "Olá, João. Recebemos sua solicitação referente à impressora do 2º andar. Seu chamado foi classificado como Incidente de Hardware e encaminhado para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -283,6 +307,8 @@
     "tempo_processamento_ms": 1461,
     "resposta_sugerida": "Olá Fernanda, recebemos a sua solicitação para instalação da versão homologada do Chrome. Seu chamado foi classificado como Solicitação e encaminhado para a equipe responsável para tratativa. Em breve retornaremos com atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -305,6 +331,8 @@
     "tempo_processamento_ms": 1423,
     "resposta_sugerida": "Olá Ricardo, recebemos seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica analisar e normalizar o sinal.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -327,6 +355,8 @@
     "tempo_processamento_ms": 1989,
     "resposta_sugerida": "Olá Juliana, recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro e ela foi encaminhada para a equipe de Acessos. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -349,6 +379,8 @@
     "tempo_processamento_ms": 1577,
     "resposta_sugerida": "Olá Lucas, recebemos sua solicitação referente ao monitor que não liga. O chamado foi classificado como Incidente e encaminhado para a equipe de Hardware. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -371,6 +403,8 @@
     "tempo_processamento_ms": 1425,
     "resposta_sugerida": "Olá Patrícia, sua solicitação de instalação do pacote Office foi recebida e encaminhada para a equipe de suporte técnico. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -393,6 +427,8 @@
     "tempo_processamento_ms": 1637,
     "resposta_sugerida": "Olá, Ana. Recebemos o seu chamado referente à falha de autenticação SSL na VPN. Sua solicitação foi classificada como Incidente na categoria Redes e encaminhada para a equipe de suporte técnico analisar. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -415,6 +451,8 @@
     "tempo_processamento_ms": 1495,
     "resposta_sugerida": "Olá Carlos, recebemos a sua solicitação referente ao desbloqueio de senha de rede (AD). Sua demanda foi classificada e encaminhada para a equipe responsável realizar o atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -437,6 +475,8 @@
     "tempo_processamento_ms": 1297,
     "resposta_sugerida": "Olá Mariana, recebemos sua solicitação referente à impressora do 2º andar. O chamado foi classificado como Incidente de Hardware e encaminhado para a equipe de suporte técnico realizar o atendimento no local.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -459,6 +499,8 @@
     "tempo_processamento_ms": 2017,
     "resposta_sugerida": "Olá, João. Recebemos sua solicitação de atualização do navegador corporativo (Chrome). O chamado foi categorizado e encaminhado para a equipe de suporte de Software para atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -481,6 +523,8 @@
     "tempo_processamento_ms": 1356,
     "resposta_sugerida": "Olá, Fernanda! Identificamos seu chamado sobre a oscilação no Wi-Fi corporativo na sala de reuniões 3. O caso foi categorizado como Incidente de Redes e encaminhado para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -503,6 +547,8 @@
     "tempo_processamento_ms": 1321,
     "resposta_sugerida": "Olá Ricardo, recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro. O chamado foi classificado e encaminhado para a equipe responsável para providenciar o perfil de leitura.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -525,6 +571,8 @@
     "tempo_processamento_ms": 1580,
     "resposta_sugerida": "Olá Juliana, recebemos o seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Hardware para análise e suporte.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -547,6 +595,8 @@
     "tempo_processamento_ms": 1460,
     "resposta_sugerida": "Olá Lucas, sua solicitação de instalação do pacote Office (Excel e Word) na estação 14 foi registrada e encaminhada para a equipe responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -569,6 +619,8 @@
     "tempo_processamento_ms": 1653,
     "resposta_sugerida": "Olá, Patrícia. Recebemos o seu chamado sobre a desconexão da VPN com erro de autenticação SSL. Sua demanda foi classificada como Incidente e encaminhada à equipe de Redes para análise e suporte. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -591,6 +643,8 @@
     "tempo_processamento_ms": 1658,
     "resposta_sugerida": "Olá Ana, identificamos sua solicitação referente à senha de rede bloqueada no AD. O chamado foi direcionado para a equipe de suporte para os devidos procedimentos. Em breve você receberá atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -613,6 +667,8 @@
     "tempo_processamento_ms": 1573,
     "resposta_sugerida": "Olá Carlos, recebemos o seu chamado referente ao problema na impressora do 2º andar e ele foi categorizado como Incidente de Hardware. Nossa equipe de suporte técnico já foi acionada para realizar a verificação e o atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -635,6 +691,8 @@
     "tempo_processamento_ms": 1364,
     "resposta_sugerida": "Olá, Mariana. Sua solicitação de instalação da versão homologada do navegador Chrome foi registrada com sucesso e encaminhada para a equipe responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -657,6 +715,8 @@
     "tempo_processamento_ms": 1543,
     "resposta_sugerida": "Olá, João! Recebemos o seu chamado sobre a oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua demanda foi classificada como um Incidente de Redes e encaminhada para a equipe técnica analisar. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -679,6 +739,8 @@
     "tempo_processamento_ms": 1411,
     "resposta_sugerida": "Olá, Fernanda. Recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro. O chamado foi classificado e encaminhado para a equipe responsável para providências.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -701,6 +763,8 @@
     "tempo_processamento_ms": 1476,
     "resposta_sugerida": "Olá Ricardo, recebemos seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Hardware para análise. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -723,6 +787,8 @@
     "tempo_processamento_ms": 1291,
     "resposta_sugerida": "Olá, Juliana! Sua solicitação de instalação do pacote Office (Excel e Word) na estação 14 foi registrada com sucesso e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -745,6 +811,8 @@
     "tempo_processamento_ms": 1632,
     "resposta_sugerida": "Olá, Lucas! Recebemos o seu chamado referente à desconexão da VPN com erro de autenticação SSL. Sua solicitação foi classificada e encaminhada para a equipe de Redes para análise e suporte. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -767,6 +835,8 @@
     "tempo_processamento_ms": 1635,
     "resposta_sugerida": "Olá, Patrícia. Sua solicitação de desbloqueio de senha de rede foi recebida e encaminhada para a equipe de suporte. Entraremos em contato em breve para realizar o procedimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -789,6 +859,8 @@
     "tempo_processamento_ms": 1506,
     "resposta_sugerida": "Olá Ana. Recebemos seu chamado referente à impressora do 2º andar atolada. A demanda foi classificada como Incidente e encaminhada para a equipe de Hardware para atendimento. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -811,6 +883,8 @@
     "tempo_processamento_ms": 1471,
     "resposta_sugerida": "Olá, Carlos! Recebemos sua solicitação de atualização do navegador corporativo (Chrome). Seu chamado foi classificado como Solicitação de Software e encaminhado para a equipe responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -833,6 +907,8 @@
     "tempo_processamento_ms": 1769,
     "resposta_sugerida": "Olá Mariana, sua solicitação referente à oscilação no Wi-Fi na sala de reuniões 3 foi registrada como Incidente e encaminhada para a equipe de Redes. Entraremos em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -855,6 +931,8 @@
     "tempo_processamento_ms": 1415,
     "resposta_sugerida": "Olá, João! Recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro. O chamado foi classificado como Solicitação na categoria Acessos e encaminhado à equipe responsável. Em breve entraremos em contato com atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -877,6 +955,8 @@
     "tempo_processamento_ms": 1535,
     "resposta_sugerida": "Olá Fernanda, recebemos o seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Hardware para análise e suporte. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -899,6 +979,8 @@
     "tempo_processamento_ms": 1595,
     "resposta_sugerida": "Olá Ricardo, sua solicitação de instalação do pacote Office foi registrada e encaminhada para a equipe de suporte técnico para providências.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -921,6 +1003,8 @@
     "tempo_processamento_ms": 1391,
     "resposta_sugerida": "Olá Juliana, recebemos seu chamado referente à falha de conexão na VPN. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Redes para análise e suporte. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -943,6 +1027,8 @@
     "tempo_processamento_ms": 1738,
     "resposta_sugerida": "Olá Lucas, recebemos sua solicitação referente ao desbloqueio e redefinição de sua senha de rede. Sua demanda foi encaminhada para a equipe responsável para análise e atendimento. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -965,6 +1051,8 @@
     "tempo_processamento_ms": 1490,
     "resposta_sugerida": "Olá Patricia, recebemos o seu chamado referente ao atolamento de papel na impressora do 2º andar. Sua solicitação foi classificada como Incidente (Hardware) e encaminhada para a equipe de suporte técnico realizar o atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -987,6 +1075,8 @@
     "tempo_processamento_ms": 1482,
     "resposta_sugerida": "Olá, Ana! Recebemos sua solicitação de atualização do navegador corporativo (Chrome). O chamado foi categorizado e encaminhado para a equipe de Software. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1009,6 +1099,8 @@
     "tempo_processamento_ms": 1580,
     "resposta_sugerida": "Olá Carlos, recebemos seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica responsável realizar a verificação. Retornaremos em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1031,6 +1123,8 @@
     "tempo_processamento_ms": 1539,
     "resposta_sugerida": "Olá, Mariana. Sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi recebida e encaminhada para a equipe de Acessos. Em breve retornaremos com a liberação.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1053,6 +1147,8 @@
     "tempo_processamento_ms": 1502,
     "resposta_sugerida": "Olá, João. Recebemos o seu chamado referente ao monitor que não liga. A solicitação foi classificada como Incidente de Hardware e encaminhada para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1075,6 +1171,8 @@
     "tempo_processamento_ms": 1378,
     "resposta_sugerida": "Olá Fernanda, sua solicitação de instalação do pacote Office foi registrada e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1097,6 +1195,8 @@
     "tempo_processamento_ms": 1310,
     "resposta_sugerida": "Olá Ricardo, sua solicitação referente à queda de conexão da VPN foi registrada e classificada na categoria Redes. Nossa equipe técnica analisará o erro de autenticação SSL e entrará em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1119,6 +1219,8 @@
     "tempo_processamento_ms": 1492,
     "resposta_sugerida": "Olá, Juliana! Recebemos sua solicitação referente ao desbloqueio e redefinição de senha de rede. Sua demanda foi triada e encaminhada para a equipe de suporte responsável. Em breve você receberá atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1141,6 +1243,8 @@
     "tempo_processamento_ms": 1511,
     "resposta_sugerida": "Olá Lucas, recebemos sua solicitação referente à impressora do 2º andar. O chamado foi classificado como Incidente de Hardware e encaminhado para a equipe técnica responsável realizar o atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1163,6 +1267,8 @@
     "tempo_processamento_ms": 1337,
     "resposta_sugerida": "Olá Patricia, recebemos sua solicitação de atualização do navegador corporativo. O chamado foi classificado e encaminhado para a equipe responsável para providências.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1185,6 +1291,8 @@
     "tempo_processamento_ms": 1452,
     "resposta_sugerida": "Olá Ana, recebemos seu chamado referente à oscilação no Wi-Fi corporativo (sala de reuniões 3). Nossa equipe de redes foi notificada e dará andamento à análise. Em breve entraremos em contato com atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1207,6 +1315,8 @@
     "tempo_processamento_ms": 1568,
     "resposta_sugerida": "Olá Carlos, sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi recebida e encaminhada para a equipe responsável. Em breve você receberá atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1229,6 +1339,8 @@
     "tempo_processamento_ms": 1417,
     "resposta_sugerida": "Olá, Mariana! Recebemos sua solicitação referente ao monitor que não liga. O chamado foi classificado como Incidente na categoria Hardware e encaminhado para a equipe de suporte técnico realizar a análise.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1251,6 +1363,8 @@
     "tempo_processamento_ms": 1520,
     "resposta_sugerida": "Olá, João. Recebemos sua solicitação de instalação e ativação do pacote Office (Excel e Word) para a estação 14. O chamado foi classificado como Software e encaminhado para a equipe técnica responsável realizar o atendimento. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1273,6 +1387,8 @@
     "tempo_processamento_ms": 1577,
     "resposta_sugerida": "Olá, Fernanda! Identificamos seu chamado sobre a desconexão da VPN com erro de autenticação SSL. Sua solicitação foi classificada como Incidente na categoria Redes e encaminhada para a equipe de suporte técnico analisar.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1295,6 +1411,8 @@
     "tempo_processamento_ms": 1408,
     "resposta_sugerida": "Olá Ricardo, sua solicitação de desbloqueio de conta no AD foi recebida e encaminhada para a equipe de suporte. Em breve entraremos em contato com as instruções.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1317,6 +1435,8 @@
     "tempo_processamento_ms": 1488,
     "resposta_sugerida": "Olá Juliana, recebemos seu chamado referente à impressora do 2º andar. A solicitação foi classificada como incidente de hardware e encaminhada para a equipe de suporte técnico realizar a verificação. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1339,6 +1459,8 @@
     "tempo_processamento_ms": 1902,
     "resposta_sugerida": "Olá, Lucas. Recebemos sua solicitação de atualização do navegador corporativo (Chrome). O chamado foi direcionado à equipe responsável para atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1361,6 +1483,8 @@
     "tempo_processamento_ms": 1402,
     "resposta_sugerida": "Olá, Patrícia. Recebemos seu chamado referente à oscilação no Wi-Fi corporativo (sala de reuniões 3). A demanda foi classificada como um Incidente de Redes e encaminhada à equipe técnica responsável para verificação. Retornaremos em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1383,6 +1507,8 @@
     "tempo_processamento_ms": 1413,
     "resposta_sugerida": "Olá Ana, sua solicitação de acesso ao ERP para o novo colaborador foi recebida e encaminhada para a equipe responsável pela gestão de acessos. Em breve entraremos em contato com atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1405,6 +1531,8 @@
     "tempo_processamento_ms": 1646,
     "resposta_sugerida": "Olá, Carlos! Recebemos sua solicitação referente ao monitor que não liga. O chamado foi classificado como Incidente na categoria Hardware e encaminhado para a equipe de suporte técnico realizar a análise. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1427,6 +1555,8 @@
     "tempo_processamento_ms": 1421,
     "resposta_sugerida": "Olá Mariana, recebemos sua solicitação de instalação do pacote Office (Excel e Word) na estação 14. O chamado foi categorizado como Software e encaminhado para a equipe de suporte responsável realizar o atendimento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1449,6 +1579,8 @@
     "tempo_processamento_ms": 1503,
     "resposta_sugerida": "Olá, João. Recebemos seu chamado referente à falha de conexão na VPN. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe de suporte técnico analisar. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1471,6 +1603,8 @@
     "tempo_processamento_ms": 1949,
     "resposta_sugerida": "Olá Fernanda, recebemos a sua solicitação referente ao desbloqueio e redefinição de senha de rede. Seu chamado foi direcionado à equipe de suporte para atendimento e em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1493,6 +1627,8 @@
     "tempo_processamento_ms": 1385,
     "resposta_sugerida": "Olá, Ricardo! Recebemos o seu chamado referente ao problema de atolamento de papel na impressora do 2º andar. A nossa equipe de suporte de Hardware já foi notificada e fará o atendimento em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1515,6 +1651,8 @@
     "tempo_processamento_ms": 1597,
     "resposta_sugerida": "Olá Juliana, sua solicitação de instalação da versão homologada do Google Chrome foi registrada e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1537,6 +1675,8 @@
     "tempo_processamento_ms": 1669,
     "resposta_sugerida": "Olá Lucas. Recebemos o seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1559,6 +1699,8 @@
     "tempo_processamento_ms": 1476,
     "resposta_sugerida": "Olá, Patrícia! Sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi registrada e encaminhada para a equipe responsável para liberação do perfil de leitura.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1581,6 +1723,8 @@
     "tempo_processamento_ms": 1457,
     "resposta_sugerida": "Olá Ana, recebemos seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente de Hardware e encaminhada para a equipe técnica responsável. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1603,6 +1747,8 @@
     "tempo_processamento_ms": 1360,
     "resposta_sugerida": "Olá Carlos, sua solicitação de instalação do pacote Office (Excel e Word) na estação 14 foi registrada com sucesso e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1625,6 +1771,8 @@
     "tempo_processamento_ms": 1392,
     "resposta_sugerida": "Olá Mariana, recebemos seu chamado referente à falha de conexão na VPN. Nossa equipe de Redes irá analisar a autenticação SSL e entrará em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1647,6 +1795,8 @@
     "tempo_processamento_ms": 1442,
     "resposta_sugerida": "Olá João, recebemos sua solicitação referente ao desbloqueio e redefinição de senha de rede no AD. Seu chamado foi direcionado para a equipe de suporte e será atendido em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1669,6 +1819,8 @@
     "tempo_processamento_ms": 1422,
     "resposta_sugerida": "Olá Fernanda, recebemos o seu chamado referente ao problema na impressora do 2º andar. A solicitação foi classificada como Incidente e encaminhada à equipe de suporte de Hardware para verificação. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1691,6 +1843,8 @@
     "tempo_processamento_ms": 1349,
     "resposta_sugerida": "Olá Ricardo, sua solicitação de instalação da versão homologada do navegador Chrome foi registrada com sucesso e encaminhada para a equipe responsável.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1713,6 +1867,8 @@
     "tempo_processamento_ms": 1430,
     "resposta_sugerida": "Olá Juliana, recebemos o seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como um Incidente de Redes e foi encaminhada para a equipe técnica responsável realizar a verificação. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1735,6 +1891,8 @@
     "tempo_processamento_ms": 1356,
     "resposta_sugerida": "Olá Lucas, sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi recebida e encaminhada para a equipe de Acessos para análise e liberação.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1757,6 +1915,8 @@
     "tempo_processamento_ms": 1466,
     "resposta_sugerida": "Olá, Patrícia. Sua solicitação referente ao monitor que não liga foi classificada como um Incidente de Hardware e encaminhada para a equipe de suporte técnico. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1779,6 +1939,8 @@
     "tempo_processamento_ms": 1648,
     "resposta_sugerida": "Olá Lucas, seu chamado referente à oscilação intermitente no link secundário foi classificado como Incidente e encaminhado para a equipe de Redes. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1801,6 +1963,8 @@
     "tempo_processamento_ms": 1474,
     "resposta_sugerida": "Olá Fernanda, recebemos o seu chamado referente à lentidão no portal interno após a troca do switch. Sua demanda foi classificada como Incidente na categoria Redes e encaminhada para a equipe técnica responsável. Em breve entraremos em contato com atualizações.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1823,6 +1987,8 @@
     "tempo_processamento_ms": 1402,
     "resposta_sugerida": "Olá Mariana, recebemos seu chamado sobre o erro ao salvar no sistema. Nossa equipe técnica irá analisar o ocorrido e entrará em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": false,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1845,6 +2011,8 @@
     "tempo_processamento_ms": 2001,
     "resposta_sugerida": "Olá, João. Recebemos o seu chamado sobre a estação de trabalho desligando sozinha. O caso foi categorizado como Incidente de Hardware e encaminhado para a equipe técnica analisar o problema. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1867,6 +2035,8 @@
     "tempo_processamento_ms": 1582,
     "resposta_sugerida": "Olá Carlos, recebemos sua solicitação de acesso administrativo ao servidor de produção. Como esta operação envolve risco crítico de segurança, ela foi encaminhada para a equipe de infraestrutura e segurança da informação para análise e validação. Retornaremos em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1889,6 +2059,8 @@
     "tempo_processamento_ms": 1498,
     "resposta_sugerida": "Olá, Ricardo. Recebemos seu chamado referente ao erro 0x80040115 no software. Sua solicitação foi triada e encaminhada para a equipe técnica analisar o ocorrido. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1911,6 +2083,8 @@
     "tempo_processamento_ms": 1622,
     "resposta_sugerida": "Olá, Juliana. Sua solicitação de acesso irrestrito (administrador local e cofre de senhas) foi registrada e encaminhada para a equipe responsável para análise de segurança e aprovação gerencial. Em breve retornaremos.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1933,6 +2107,8 @@
     "tempo_processamento_ms": 1739,
     "resposta_sugerida": "Olá Lucas, recebemos sua solicitação referente ao ruído e cheiro de componente aquecido no desktop. Seu chamado foi classificado como Incidente de Hardware com urgência Crítica e foi encaminhado para a equipe técnica responsável.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1955,6 +2131,8 @@
     "tempo_processamento_ms": 1557,
     "resposta_sugerida": "Olá Patricia, recebemos seu chamado referente ao travamento do sistema financeiro ao gerar relatórios. Sua solicitação foi classificada como Incidente de Software e encaminhada à equipe técnica responsável para análise. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": false,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1977,6 +2155,8 @@
     "tempo_processamento_ms": 1659,
     "resposta_sugerida": "Olá Ana, recebemos o seu chamado referente à instabilidade relatada. Como o diagnóstico inicial apresenta ambiguidade entre rede e equipamento, nossa equipe técnica fará a triagem detalhada para o correto direcionamento. Em breve entraremos em contato.",
     "acerto_categoria": false,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -1999,6 +2179,8 @@
     "tempo_processamento_ms": 1285,
     "resposta_sugerida": "Olá, Carlos. Sua solicitação de acesso administrativo temporário foi recebida e encaminhada para a equipe de segurança e governança para análise e aprovação.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2021,6 +2203,8 @@
     "tempo_processamento_ms": 2068,
     "resposta_sugerida": "Olá, Mariana. Recebemos o seu chamado referente ao ruído intermitente no nobreak do rack. A demanda foi classificada como Incidente de Hardware e encaminhada para a equipe técnica responsável. Entraremos em contato em breve para verificação do equipamento.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2043,6 +2227,8 @@
     "tempo_processamento_ms": 1542,
     "resposta_sugerida": "Olá, João. Recebemos o seu chamado referente à falha intermitente na integração fiscal (notas presas na fila). O caso foi classificado como Incidente em Software e encaminhado para a equipe técnica responsável analisar o erro. Entraremos em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2065,6 +2251,8 @@
     "tempo_processamento_ms": 1377,
     "resposta_sugerida": "Olá, Fernanda. Recebemos sua solicitação de liberação de portas no firewall para fornecedor. O chamado foi classificado como Redes (Solicitação) e encaminhado para a equipe técnica responsável avaliar os procedimentos de segurança. Entraremos em contato em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2087,6 +2275,8 @@
     "tempo_processamento_ms": 1356,
     "resposta_sugerida": "Olá Ricardo, recebemos sua solicitação referente à criação de usuário. A demanda foi encaminhada para a equipe responsável para análise e tratamento. Retornaremos em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2109,6 +2299,8 @@
     "tempo_processamento_ms": 1496,
     "resposta_sugerida": "Olá Juliana, recebemos seu chamado referente ao superaquecimento na estação de engenharia e ele foi direcionado para a equipe de Hardware com urgência Alta. Um técnico analisará o caso em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2131,6 +2323,8 @@
     "tempo_processamento_ms": 1696,
     "resposta_sugerida": "Olá Lucas, recebemos o seu chamado referente à falha no módulo de faturamento do ERP após a atualização. Sua demanda foi classificada como um Incidente de Software e encaminhada à equipe de suporte técnico para análise. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2153,6 +2347,8 @@
     "tempo_processamento_ms": 1545,
     "resposta_sugerida": "Olá, Patrícia. Sua solicitação de liberação de faixa de IPs na DMZ foi registrada e encaminhada para a equipe de Redes para análise de segurança e viabilidade técnica. Retornaremos em breve.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2175,6 +2371,8 @@
     "tempo_processamento_ms": 1337,
     "resposta_sugerida": "Olá, Ana! Recebemos sua solicitação de inclusão no grupo Domain Admins. Como este procedimento envolve privilégios administrativos críticos no Active Directory, seu chamado foi encaminhado para a equipe de segurança e infraestrutura para validação e revisão humana. Em breve entraremos em contato.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   },
   {
@@ -2197,6 +2395,8 @@
     "tempo_processamento_ms": 1477,
     "resposta_sugerida": "Olá Carlos, recebemos seu chamado referente à lentidão severa na conexão IPsec entre a matriz e a filial. O caso foi categorizado como Incidente de Redes e encaminhado para a equipe de infraestrutura de redes analisar a perda de pacotes no túnel.",
     "acerto_categoria": true,
+    "acerto_intencao": true,
+    "acerto_roteamento": true,
     "origem_dados": "execucao_real_n8n_gemini_supabase"
   }
 ]

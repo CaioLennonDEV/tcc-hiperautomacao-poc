@@ -71,10 +71,20 @@ tcc-hiperautomacao-poc/
 Todas as 100 solicitações sintéticas (`IDs 2001` a `2100`) percorreram integralmente o fluxo no **n8n v2.47.7**, receberam inferência ao vivo do **Google Gemini (`models/gemini-3.5-flash-lite`, `temperature = 0`)**, acionaram a emulação HTTP (`https://httpbin.org/post` — 100/100 retornaram HTTP `200`) e gravaram um registro auditável no **Supabase (`chamados_triagem`)**:
 
 1. **Logs individuais do n8n ([`evidencias/logs_execucao_n8n_100.json`](evidencias/logs_execucao_n8n_100.json)):** contém os 100 rastreamentos nó a nó exportados do banco do n8n (`status = "success"`), incluindo `tokenUsage`, `finishReason = "STOP"`, saída do `Structured Output Parser`, decisão do nó `IF`, corpo ecoado pelo `httpbin.org/post` e UUID retornado pelo Supabase (credenciais e IPs sanitizados).
-2. **Registros reais do Supabase ([`evidencias/resultados_execucao_100.json`](evidencias/resultados_execucao_100.json), `.csv` e [`database/schema.sql`](database/schema.sql)):** preservam as 100 linhas efetivamente inseridas no banco pelo nó `Registra Auditoria no Supabase`, incluindo UUID real, timestamp UTC e latência medida (`tempo_processamento_ms`), sem preenchimento artificial (`1900` ms removido).
+2. **Registros reais do Supabase ([`evidencias/resultados_execucao_100.json`](evidencias/resultados_execucao_100.json), `.csv` e [`database/schema.sql`](database/schema.sql)):** preservam as 100 linhas efetivamente inseridas no banco pelo nó `Registra Auditoria no Supabase`, incluindo UUID real, timestamp UTC, sinalizadores individuais de acerto (`acerto_categoria`, `acerto_intencao`, `acerto_roteamento`) e latência medida (`tempo_processamento_ms`), sem preenchimento artificial (`1900` ms removido).
 3. **Testes controlados de fronteira via Python ([`scripts/validar_poc.py`](scripts/validar_poc.py) -> [`evidencias/testes_valor_limite_httpbin.json`](evidencias/testes_valor_limite_httpbin.json)):** como o modelo Gemini em execução real retornou confiança em múltiplos de `0,05` (`0,50` a `1,00`), o script Python executa adicionalmente 5 disparos HTTP `POST` diretos contra `https://httpbin.org/post` sobre os exatos valores de fronteira (`0,84`, `0,85`, `0,86` e crítico `0,92`), devidamente rotulados com `executado_no_n8n = false` e `inferencia_gemini_real = false`.
 
-### Indicadores Reais Medidos (`logs_execucao_n8n_100.json` + Supabase)
+### Evolução das Evidências: Carga SQL Sintética Inicial vs. Nova Bateria Ao Vivo no n8n
+
+| Aspecto | Carga Sintética Inicial em SQL *(superada)* | Nova Bateria Ao Vivo (`n8n + Gemini + Supabase`) *(atual)* |
+| :--- | :--- | :--- |
+| **Origem dos dados** | `INSERT` estático pré-preenchido em SQL, sem chamadas reais ao Gemini | 100 execuções ao vivo no `n8n` (`evidencias/logs_execucao_n8n_100.json`) gravadas no Supabase |
+| **Padronizados (`2001..2080`, `N = 80`)** | `74 / 80` (`92,5%`) predeterminada no seed | **`80 / 80` (`100,0%`)** em categoria e intenção |
+| **Global (`2001..2100`, `N = 100`)** | Rótulos estáticos pré-carregados | **`99 / 100` (`99,0%`)** em categoria, intenção e concordância de roteamento |
+| **Encaminhamento** | `82` automáticos / `18` revisões humanas | **`83` automáticos (`83,0%`) / `17` revisões humanas (`17,0%`)** (`8` `< 0,85` + `9` críticos) |
+| **Tempo de processamento** | `NULL` no SQL / placeholder preliminar (`1.900 ms`) no workflow | **`1.519,4 ms`** médios efetivamente medidos (`151.938 ms` no lote; mediana `1.487,0 ms`) |
+
+### Indicadores Reais Recalculados dos Logs (`logs_execucao_n8n_100.json` + Supabase)
 
 | Indicador | Critério / Evidência Real (`N = 100`) | Resultado Obtido |
 | :--- | :--- | :--- |
@@ -83,10 +93,11 @@ Todas as 100 solicitações sintéticas (`IDs 2001` a `2100`) percorreram integr
 | Acurácia categorial (padronizados) | `categoria_sugerida == categoria_gabarito` (`2001..2080`) | **80 de 80 (100,0%)** |
 | Acurácia de intenção (padronizados) | `intencao_classificada == intencao_gabarito` (`2001..2080`) | **80 de 80 (100,0%)** |
 | Acurácia categorial global (`N = 100`) | `categoria_sugerida == categoria_gabarito` (`2001..2100`) | **99 de 100 (99,0%)** *(1 divergência em `2090` com confiança `0,50` -> Revisão Humana)* |
+| Acurácia de intenção global (`N = 100`) | `intencao_classificada == intencao_gabarito` (`2001..2100`) | **99 de 100 (99,0%)** *(1 divergência em `2083` com confiança `0,65` -> Revisão Humana)* |
 | Concordância de roteamento global | `status_processamento == roteamento_esperado` (`2001..2100`) | **99 de 100 (99,0%)** *(1 divergência em `2089`: `0,90` -> Automático)* |
 | Encaminhamento automático | `confianca >= 0.85` e `requer_revisao_humana = false` | **83 de 100 (83,0%)** |
 | Encaminhamento para revisão humana (HITL) | `8` baixa confiança (`< 0.85`) + `9` críticos (`>= 0.85` + revisão obrigatória) | **17 de 100 (17,0%)** |
-| Tempo total medido (Webhook -> Supabase) | Média / Mediana / Mín.–Máx. (`tempo_processamento_ms`) | **1.519,4 ms (~1,52 s)** / Mediana **1.487,0 ms** (`1.285`–`2.068` ms) |
+| Tempo total medido (Webhook -> Supabase) | Soma `151.938 ms` / Média / Mediana / Mín.–Máx. (`tempo_processamento_ms`) | **1.519,4 ms (~1,52 s)** / Mediana **1.487,0 ms** (`1.285`–`2.068` ms) |
 | Latência isolada do nó Gemini | Média / Mediana / Mín.–Máx. (`Google Gemini Chat Model`) | **937,4 ms** / Mediana **918,0 ms** (`723`–`1.466` ms) |
 | Consumo total de tokens (`N = 100`) | `tokenUsage` registrado pelo nó Gemini no n8n | **103.060 tokens** (`88.965` prompt + `14.095` saída; média `1.030,6`/chamado) |
 
@@ -152,5 +163,6 @@ Amostra de registros reais gravados pelo fluxo n8n na tabela `chamados_triagem` 
 ## 6. Limitações e Escopo da Prova de Conceito (PoC)
 - **Entrada sintética:** os 100 chamados (`2001..2100`) foram elaborados sinteticamente para viabilizar o experimento de forma controlada, reprodutível e sem exposição de dados pessoais ou corporativos reais.
 - **Emulação da saída do GLPI:** os nós de encaminhamento (`Atualiza Chamado no GLPI (API)` e `Desvio para Fila Humana (Human-in-the-Loop)`) comunicam via `HTTP POST` com `https://httpbin.org/post`, comprovando a formatação de payload e recepção HTTP `200`, sem alterar tickets em um servidor GLPI produtivo.
+- **Avaliação restrita ao desempenho da PoC:** os indicadores apurados documentam exclusivamente o comportamento técnico e temporal da própria esteira da PoC (`N = 100`), sem comparação empírica de ganho de tempo ou produtividade frente ao atendimento humano manual.
 - **Condições da medição de latência:** o tempo médio efetivo de `1.519,4 ms` (~`1,52 s`) refere-se à amostra experimental controlada (`N = 100`) executada com requisições sequenciais e retentativas com *backoff* para 11 limitações transientes (`HTTP 429`) da API gratuita do Gemini, não representando garantia de SLA ou disponibilidade `24×7` em ambiente produtivo.
 - **Escoragem do modelo:** o campo `confianca` representa uma estimativa retornada pelo próprio LLM, o que justifica o controle híbrido com revisão humana obrigatória (`requer_revisao_humana = true`) para casos ambíguos ou críticos (`2089` exemplifica a importância de calibragem periódica de regras pelo CoE).
