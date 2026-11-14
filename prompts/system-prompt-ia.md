@@ -1,17 +1,30 @@
-# System Prompt e Análise de Valor-Limite (Boundary Value Analysis) - Triagem Cognitiva de Chamados (GLPI)
+# System Prompt e Análise de Valor-Limite (*Boundary Value Analysis*) — Triagem Cognitiva de Chamados (GLPI)
 
-## 1. Papel e Instrução Diretiva (System Prompt)
-Você é um classificador determinístico para triagem de chamados do GLPI integrado à esteira de hiperautomação. Responda ESTRITAMENTE em formato JSON com as chaves: `intencao`, `urgencia`, `categoria_glpi`, `confianca` (0.0 a 1.0), `resumo_demanda`, `resposta_sugerida` e `requer_revisao_humana` (booleano, `true` se `confianca < 0.85` ou alta ambiguidade/risco crítico).
+## 1. Configuração Técnica do Agente no n8n
+- **Workflow exportado:** [`n8n-workflows/triagem-chamados-workflow.json`](../n8n-workflows/triagem-chamados-workflow.json)
+- **Nó de modelo:** `Google Gemini Chat Model` (`@n8n/n8n-nodes-langchain.lmChatGoogleGemini`, `typeVersion: 1.2`)
+- **Identificador do modelo:** `models/gemini-3.5-flash-lite`
+- **Temperatura:** `0` (`0.0` — geração determinística)
+- **Parser estruturado:** `Structured Output Parser` (`@n8n/n8n-nodes-langchain.outputParserStructured`, `typeVersion: 1.3`)
+- **Gateway condicional:** `Verifica Confianca (Score >= 0.85)` — exige simultaneamente `requer_revisao_humana == false` e `confianca >= 0.85` para encaminhamento automático.
 
-## 2. Regras de Execução e Metodologia de Limiar ABC
-1. Responda exclusivamente em JSON válido conforme o esquema, sem blocos Markdown externos ou texto adicional.
-2. Não alucine configurações de infraestrutura ou dados técnicos ausentes no relato original.
-3. Aplique a avaliação probabilística de fronteira (Análise de Valor-Limite / *Boundary Value Analysis*) sobre o limiar `0.85`, especificando que a verificação dos valores limítrofes (0,84 abaixo do limiar, 0,85 exatamente no limiar e 0,86 acima do limiar) ocorre mediante injeção controlada de payloads no nó condicional (IF) do n8n:
-   - **Caso A (Acima do Limiar — `confianca > 0.85`):** Demandas padronizadas, claras e recorrentes de N1 -> `requer_revisao_humana: false` (Fluxo Autônomo).
-   - **Caso B (No Limiar Exato — `confianca == 0.85`):** Demandas com descrição suficiente para classificação categorial segura no limite operacional -> `requer_revisao_humana: false` (Fluxo Autônomo).
-   - **Caso C (Abaixo do Limiar — `confianca < 0.85`):** Relatos vagos, múltiplos sintomas conflitantes ou solicitações críticas de segurança (ex.: liberação de firewall/root) -> `requer_revisao_humana: true` (Desvio *Human-in-the-Loop*).
+## 2. Papel e Instrução Diretiva (System Prompt)
+Texto configurado em `Agente Cognitivo LLM (Parsing)` (`options.systemMessage`):
 
-## 3. Esquema JSON de Saída (Structured Output Parser)
+```text
+Você é um classificador determinístico para triagem de chamados do GLPI integrado à esteira de hiperautomação. Responda ESTRITAMENTE em formato JSON com as chaves: intencao, urgencia, categoria_glpi, confianca (0.0 a 1.0), resumo_demanda, resposta_sugerida e requer_revisao_humana (booleano, true se confianca < 0.85 ou alta ambiguidade/risco crítico).
+```
+
+## 3. Regras de Execução e Metodologia de Limiar (Análise de Valor-Limite)
+1. Responder exclusivamente em JSON válido conforme o esquema definido no *Structured Output Parser*, sem texto adicional ou blocos externos.
+2. Não inventar configurações de infraestrutura ou dados técnicos ausentes no relato original.
+3. Aplicar a **Análise de Valor-Limite (*Boundary Value Analysis*)** sobre o limiar `0.85` no nó condicional (`Verifica Confianca (Score >= 0.85)`), cobrindo quatro casos de fronteira e exceção crítica:
+   - **Caso A (Acima do Limiar — `confianca = 0.86`, `requer_revisao_humana = false`):** Demanda padronizada e clara -> **Roteamento Automático** (`Atualiza Chamado no GLPI (API)`).
+   - **Caso B (No Limiar Exato — `confianca = 0.85`, `requer_revisao_humana = false`):** Demanda com informação suficiente no limite operacional -> **Roteamento Automático** (`Atualiza Chamado no GLPI (API)`).
+   - **Caso C (Abaixo do Limiar — `confianca = 0.84`, `requer_revisao_humana = true`):** Demanda com ambiguidade ou escore imediatamente abaixo de `0.85` -> **Revisão Humana** (`Desvio para Fila Humana (Human-in-the-Loop)`).
+   - **Caso D (Crítico com Confiança Alta — `confianca = 0.92`, `requer_revisao_humana = true`):** Solicitação de alto risco/criticidade (ex.: permissão de administrador geral em servidor de produção ou liberação de firewall/root). Mesmo com escore de confiança acima de `0.85`, a condição booleana `requer_revisao_humana == false` falha no nó IF e o chamado segue obrigatoriamente para **Revisão Humana** (`Desvio para Fila Humana (Human-in-the-Loop)`).
+
+## 4. Esquema JSON de Saída (*Structured Output Parser*)
 ```json
 {
   "intencao": "Duvida | Incidente | Solicitacao | Outros",
@@ -24,96 +37,93 @@ Você é um classificador determinístico para triagem de chamados do GLPI integ
 }
 ```
 
-## 4. Amostra de Textos Anonimizados de Teste (Bateria Experimental N = 100)
+## 5. Casos de Teste de Limite e Exemplos de Payloads (Entrada e Saída Estruturada)
 
-### 4.1 Cenários Padronizados (80% da amostra — Exemplo Caso A: `confianca > 0.85`)
+### 5.1 Casos de Teste de Limite (`0.86`, `0.85`, `0.84` e Caso Crítico `0.92`)
+Os payloads completos e os logs de requisição HTTP emulada contra `https://httpbin.org/post` estão registrados em [`../evidencias/testes_valor_limite_httpbin.json`](../evidencias/testes_valor_limite_httpbin.json).
+
 ```json
 [
   {
-    "ticket_id": 2001,
-    "user_email": "carlos.souza@empresa.com",
-    "ticket_title": "Esqueci minha senha de rede",
-    "ticket_description": "Digitei a senha incorreta 3 vezes e bloqueou no AD.",
-    "expected_category": "Acessos",
-    "expected_routing": "Automatico"
+    "caso_teste": "Limite Superior (confianca = 0.86)",
+    "input": {
+      "ticket_id": 2080,
+      "user_email": "patricia.gomes@empresa.com",
+      "ticket_title": "Solicitação de acesso ao ERP",
+      "ticket_description": "Novo colaborador do financeiro precisa de perfil de leitura."
+    },
+    "output_parser": {
+      "intencao": "Solicitacao",
+      "urgencia": "Baixa",
+      "categoria_glpi": "Acessos",
+      "confianca": 0.86,
+      "resumo_demanda": "Solicitação de perfil de leitura no ERP para novo colaborador do setor financeiro.",
+      "resposta_sugerida": "Prezado(a), sua solicitação foi triada automaticamente e encaminhada para atendimento conforme procedimento padrão.",
+      "requer_revisao_humana": false
+    },
+    "decisao_gateway_n8n": "Automatico"
   },
   {
-    "ticket_id": 2002,
-    "user_email": "mariana.costa@empresa.com",
-    "ticket_title": "Solicitação de acesso ao ERP",
-    "ticket_description": "Novo colaborador do financeiro precisa de perfil de leitura.",
-    "expected_category": "Acessos",
-    "expected_routing": "Automatico"
+    "caso_teste": "Limite Exato (confianca = 0.85)",
+    "input": {
+      "ticket_id": 2081,
+      "user_email": "lucas.martins@empresa.com",
+      "ticket_title": "Oscilação intermitente no link secundário",
+      "ticket_description": "Queda rápida de pacotes na filial durante backup noturno, já voltou ao normal mas requer verificação da rota."
+    },
+    "output_parser": {
+      "intencao": "Incidente",
+      "urgencia": "Alta",
+      "categoria_glpi": "Redes",
+      "confianca": 0.85,
+      "resumo_demanda": "Oscilação intermitente com queda de pacotes no link secundário da filial durante backup noturno.",
+      "resposta_sugerida": "Prezado(a), sua solicitação foi triada automaticamente e encaminhada para atendimento conforme procedimento padrão.",
+      "requer_revisao_humana": false
+    },
+    "decisao_gateway_n8n": "Automatico"
   },
   {
-    "ticket_id": 2003,
-    "user_email": "joao.pereira@empresa.com",
-    "ticket_title": "Monitor não liga",
-    "ticket_description": "Cabo de energia testado na tomada, mas o LED não acende.",
-    "expected_category": "Hardware",
-    "expected_routing": "Automatico"
+    "caso_teste": "Limite Inferior (confianca = 0.84)",
+    "input": {
+      "ticket_id": 2084,
+      "user_email": "joao.pereira@empresa.com",
+      "ticket_title": "Estação desligando sozinha",
+      "ticket_description": "O gabinete apita e desliga do nada, não sei se é fonte ou placa."
+    },
+    "output_parser": {
+      "intencao": "Incidente",
+      "urgencia": "Media",
+      "categoria_glpi": "Hardware",
+      "confianca": 0.84,
+      "resumo_demanda": "Estação de trabalho desligando repentinamente com sinal sonoro, sem diagnóstico conclusivo entre fonte e placa.",
+      "resposta_sugerida": "Chamado encaminhado para revisão técnica (Human-in-the-Loop) devido a escore de confiança inferior a 0.85 ou alta criticidade.",
+      "requer_revisao_humana": true
+    },
+    "decisao_gateway_n8n": "Revisao Humana"
   },
   {
-    "ticket_id": 2004,
-    "user_email": "fernanda.lima@empresa.com",
-    "ticket_title": "VPN desconectando",
-    "ticket_description": "Erro de autenticação SSL ao conectar de home office.",
-    "expected_category": "Redes",
-    "expected_routing": "Automatico"
-  },
-  {
-    "ticket_id": 2005,
-    "user_email": "ricardo.alves@empresa.com",
-    "ticket_title": "Instalação do pacote Office",
-    "ticket_description": "Preciso do Excel e Word ativados na estação 14.",
-    "expected_category": "Software",
-    "expected_routing": "Automatico"
-  },
-  {
-    "ticket_id": 2006,
-    "user_email": "juliana.rocha@empresa.com",
-    "ticket_title": "Impressora do 2º andar atolada",
-    "ticket_description": "Apresentando erro de bandeja e não puxa papel.",
-    "expected_category": "Hardware",
-    "expected_routing": "Automatico"
+    "caso_teste": "Caso Crítico com Confiança Alta (confianca = 0.92, revisao obrigatoria)",
+    "input": {
+      "ticket_id": 2085,
+      "user_email": "carlos.souza@empresa.com",
+      "ticket_title": "Liberar acesso total",
+      "ticket_description": "Preciso de permissão de administrador geral no servidor de produção."
+    },
+    "output_parser": {
+      "intencao": "Solicitacao",
+      "urgencia": "Critica",
+      "categoria_glpi": "Acessos",
+      "confianca": 0.92,
+      "resumo_demanda": "Solicitação crítica de privilégio de administrador geral em servidor de produção.",
+      "resposta_sugerida": "Solicitação crítica de privilégio administrativo encaminhada obrigatoriamente para revisão e aprovação humana (Human-in-the-Loop), apesar da alta confiança na categorização.",
+      "requer_revisao_humana": true
+    },
+    "decisao_gateway_n8n": "Revisao Humana"
   }
 ]
 ```
 
-### 4.2 Cenários de Fronteira e Ambíguos/Críticos (20% da amostra — Casos B = 0.85 e C < 0.85)
-```json
-[
-  {
-    "ticket_id": 2081,
-    "user_email": "lucas.martins@empresa.com",
-    "ticket_title": "Oscilação intermitente no link secundário",
-    "ticket_description": "Queda rápida de pacotes na filial durante backup noturno, já voltou ao normal mas requer verificação da rota.",
-    "boundary_case": "Caso B (Fronteira exata = 0.85)",
-    "expected_routing": "Automatico"
-  },
-  {
-    "ticket_id": 2083,
-    "user_email": "mariana.costa@empresa.com",
-    "ticket_title": "Problema no sistema",
-    "ticket_description": "Dá erro quando tento salvar, mas às vezes vai. Verificar.",
-    "boundary_case": "Caso C (Abaixo do limiar < 0.85)",
-    "expected_routing": "Revisao Humana"
-  },
-  {
-    "ticket_id": 2086,
-    "user_email": "ricardo.alves@empresa.com",
-    "ticket_title": "Erro 0x80040115",
-    "ticket_description": "Apareceu essa janela na tela e fechou tudo que eu estava fazendo.",
-    "boundary_case": "Caso C (Abaixo do limiar < 0.85)",
-    "expected_routing": "Revisao Humana"
-  },
-  {
-    "ticket_id": 2090,
-    "user_email": "ana.silva@empresa.com",
-    "ticket_title": "Não funciona nada aqui",
-    "ticket_description": "O sistema parou depois que mexeram ontem, não sei se é rede ou PC.",
-    "boundary_case": "Caso C (Abaixo do limiar < 0.85)",
-    "expected_routing": "Revisao Humana"
-  }
-]
-```
+### 5.2 Exemplos Adicionais da Amostra Experimental (`N = 100`)
+O conjunto completo com os 100 chamados sintéticos e seus respectivos gabaritos está publicado em:
+- [`../data/chamados_sinteticos_100.json`](../data/chamados_sinteticos_100.json)
+- [`../data/gabarito_classificacao_100.csv`](../data/gabarito_classificacao_100.csv)

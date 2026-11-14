@@ -1,0 +1,101 @@
+﻿ticket_id,tipo_cenario,categoria_gabarito,intencao_gabarito,roteamento_esperado,conteudo_original
+2001,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2002,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2003,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2004,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2005,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2006,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2007,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2008,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2009,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2010,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2011,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2012,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2013,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2014,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2015,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2016,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2017,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2018,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2019,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2020,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2021,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2022,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2023,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2024,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2025,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2026,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2027,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2028,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2029,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2030,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2031,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2032,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2033,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2034,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2035,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2036,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2037,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2038,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2039,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2040,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2041,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2042,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2043,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2044,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2045,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2046,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2047,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2048,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2049,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2050,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2051,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2052,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2053,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2054,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2055,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2056,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2057,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2058,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2059,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2060,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2061,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2062,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2063,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2064,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2065,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2066,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2067,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2068,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2069,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2070,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2071,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2072,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2073,Padronizado,Software,Solicitacao,Automatico,Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.
+2074,Padronizado,Redes,Incidente,Automatico,VPN desconectando - Erro de autenticação SSL ao conectar de home office.
+2075,Padronizado,Acessos,Solicitacao,Automatico,Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.
+2076,Padronizado,Hardware,Incidente,Automatico,Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.
+2077,Padronizado,Software,Solicitacao,Automatico,Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.
+2078,Padronizado,Redes,Incidente,Automatico,Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.
+2079,Padronizado,Acessos,Solicitacao,Automatico,Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.
+2080,Padronizado,Hardware,Incidente,Automatico,"Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende."
+2081,Ambiguo_Critico,Redes,Incidente,Automatico,"Oscilação intermitente no link secundário - Queda rápida de pacotes na filial durante backup noturno, já voltou ao normal mas requer verificação da rota."
+2082,Ambiguo_Critico,Redes,Incidente,Automatico,"Lentidão pontual no acesso ao portal interno - Sistema web responde com atraso no setor comercial após troca de switch, requer verificação de rota."
+2083,Ambiguo_Critico,Software,Duvida,Revisao Humana,"Problema no sistema - Dá erro quando tento salvar, mas às vezes vai. Verificar."
+2084,Ambiguo_Critico,Hardware,Incidente,Revisao Humana,"Estação desligando sozinha - O gabinete apita e desliga do nada, não sei se é fonte ou placa."
+2085,Ambiguo_Critico,Acessos,Solicitacao,Revisao Humana,Liberar acesso total - Preciso de permissão de administrador geral no servidor de produção.
+2086,Ambiguo_Critico,Software,Incidente,Revisao Humana,Erro 0x80040115 - Apareceu essa janela na tela e fechou tudo que eu estava fazendo.
+2087,Ambiguo_Critico,Acessos,Solicitacao,Revisao Humana,Solicitação de acesso irrestrito - Usuário pede permissão de administrador local e acesso ao cofre de senhas.
+2088,Ambiguo_Critico,Hardware,Incidente,Revisao Humana,Ruído anormal no desktop - Máquina reiniciando aleatoriamente com cheiro de componente aquecido.
+2089,Ambiguo_Critico,Software,Incidente,Revisao Humana,Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro.
+2090,Ambiguo_Critico,Hardware,Outros,Revisao Humana,"Não funciona nada aqui - O sistema parou depois que mexeram ontem, não sei se é rede ou PC."
+2091,Ambiguo_Critico,Acessos,Solicitacao,Revisao Humana,Permissão temporária de root - Solicito acesso administrativo irrestrito ao banco de dados para auditoria externa.
+2092,Ambiguo_Critico,Hardware,Incidente,Revisao Humana,Ruído intermitente no nobreak - Equipamento do rack apresenta bipes ocasionais sem queda de energia aparente.
+2093,Ambiguo_Critico,Software,Incidente,Revisao Humana,Falha intermitente na integração fiscal - Notas ficam presas na fila sem mensagem conclusiva de erro.
+2094,Ambiguo_Critico,Redes,Solicitacao,Revisao Humana,Acesso externo urgente - Preciso liberar portas no firewall para um fornecedor hoje.
+2095,Ambiguo_Critico,Acessos,Solicitacao,Revisao Humana,Compartilhamento de credencial setorial - Solicito criação de usuário genérico sem rastreio individual para equipe terceirizada.
+2096,Ambiguo_Critico,Hardware,Incidente,Revisao Humana,"Superaquecimento em estação de engenharia - Computador reinicia durante renderização pesada, suspeita de cooler."
+2097,Ambiguo_Critico,Software,Incidente,Revisao Humana,Conflito após atualização do ERP - Módulo de faturamento exibe tela branca para parte dos usuários.
+2098,Ambiguo_Critico,Redes,Solicitacao,Revisao Humana,Abertura emergencial de firewall - Solicito liberação imediata de faixa de IPs externos na DMZ.
+2099,Ambiguo_Critico,Acessos,Solicitacao,Revisao Humana,Elevação de privilégio no Active Directory - Usuário solicita inclusão imediata no grupo Domain Admins.
+2100,Ambiguo_Critico,Redes,Incidente,Revisao Humana,Lentidão severa entre matriz e filial - Túnel IPsec apresenta perda intermitente de pacotes em horários aleatórios.

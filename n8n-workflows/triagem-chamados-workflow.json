@@ -173,7 +173,7 @@
         "url": "https://httpbin.org/post",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id }}\",\n  \"status\": \"Aguardando Revisao Humana\",\n  \"alerta\": \"Score de confianca inferior ao limiar de 0.85\"\n}",
+        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id }}\",\n  \"status\": \"Aguardando Revisao Humana\",\n  \"alerta\": \"{{ $json.output.output.confianca < 0.85 ? 'Score de confianca inferior ao limiar de 0.85' : 'Revisao humana obrigatoria por alta criticidade ou ambiguidade' }}\"\n}",
         "options": {}
       },
       "id": "7e10b002-ddf3-40f1-b173-9d9c48692b63",
