@@ -1,16 +1,21 @@
 """
-Script de validação e geração de evidências da Prova de Conceito (PoC).
+Script de validação e geração do resumo de indicadores da Prova de Conceito (PoC).
 
 Este script:
-1. Verifica a configuração técnica do fluxo n8n e a estrutura do script SQL.
-2. Reproduz de forma determinística o conjunto de N = 100 chamados sintéticos
-   e seus gabaritos de classificação em `data/`.
-3. Gera os arquivos de resultados consolidados (`evidencias/resultados_execucao_100.*`)
-   e o resumo dos indicadores (`evidencias/resumo_indicadores.md`).
-4. Executa testes reais de requisição HTTP POST emulada contra `https://httpbin.org/post`
-   para os casos de Análise de Valor-Limite (0.84, 0.85, 0.86) e o caso crítico
-   com confiança alta (0.92 + revisão humana obrigatória), salvando os logs em
-   `evidencias/testes_valor_limite_httpbin.json`.
+1. Verifica a configuração técnica do fluxo n8n, a estrutura do script SQL
+   e executa varredura de segredos/tokens em todo o repositório.
+2. Valida o conjunto de N = 100 chamados sintéticos (`data/chamados_sinteticos_100.json`)
+   e seus gabaritos (`data/gabarito_classificacao_100.csv`).
+3. Audita os 100 logs individuais exportados do n8n (`evidencias/logs_execucao_n8n_100.json`)
+   com chamadas reais ao Gemini (`models/gemini-3.5-flash-lite`), saída estruturada JSON,
+   respostas reais `httpbin.org/post` (HTTP 200) e gravações reais no Supabase.
+4. Valida a paridade 100% entre os 100 registros em `evidencias/resultados_execucao_100.json`,
+   `evidencias/resultados_execucao_100.csv`, `evidencias/logs_execucao_n8n_100.json`
+   e o snapshot SQL em `database/schema.sql` (executado em SQLite em memória).
+5. Executa testes HTTP POST controlados via Python contra `https://httpbin.org/post`
+   para Análise de Valor-Limite exata do limiar (0.84, 0.85, 0.86 e crítico 0.92),
+   registrando-os separadamente em `evidencias/testes_valor_limite_httpbin.json`.
+6. Regenera o relatório consolidado `evidencias/resumo_indicadores.md`.
 """
 
 from __future__ import annotations
@@ -19,11 +24,12 @@ import csv
 import json
 import re
 import sqlite3
+import statistics
 import time
 import urllib.error
 import urllib.request
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,451 +39,26 @@ SCHEMA_PATH = ROOT_DIR / "database" / "schema.sql"
 DATA_DIR = ROOT_DIR / "data"
 EVIDENCIAS_DIR = ROOT_DIR / "evidencias"
 
-EMAILS = [
-    "ana.silva@empresa.com",
-    "carlos.souza@empresa.com",
-    "mariana.costa@empresa.com",
-    "joao.pereira@empresa.com",
-    "fernanda.lima@empresa.com",
-    "ricardo.alves@empresa.com",
-    "juliana.rocha@empresa.com",
-    "lucas.martins@empresa.com",
-    "patricia.gomes@empresa.com",
+BOUNDARY_CASES = [
+    (2001, "Cenário padronizado N1 (referência)", 0.95, False, "Automatico"),
+    (2080, "Caso A — Acima do limiar (confianca = 0.86)", 0.86, False, "Automatico"),
+    (2081, "Caso B — No limiar exato (confianca = 0.85)", 0.85, False, "Automatico"),
+    (2084, "Caso C — Abaixo do limiar (confianca = 0.84)", 0.84, True, "Revisao Humana"),
+    (
+        2085,
+        "Caso D — Crítico com confiança alta (0.92 + revisão obrigatória)",
+        0.92,
+        True,
+        "Revisao Humana",
+    ),
 ]
 
-STANDARD_CASES = {
-    0: [  # Hardware
-        (
-            "Monitor não liga",
-            "Cabo de energia testado na tomada, mas o LED não acende.",
-            "Hardware",
-            "Incidente",
-            "Media",
-        ),
-        (
-            "Impressora do 2º andar atolada",
-            "Apresentando erro de bandeja e não puxa papel.",
-            "Hardware",
-            "Incidente",
-            "Media",
-        ),
-    ],
-    1: [  # Software
-        (
-            "Instalação do pacote Office",
-            "Preciso do Excel e Word ativados na estação 14.",
-            "Software",
-            "Solicitacao",
-            "Baixa",
-        ),
-        (
-            "Atualização de navegador corporativo",
-            "Solicito instalação da versão homologada do Chrome.",
-            "Software",
-            "Solicitacao",
-            "Baixa",
-        ),
-    ],
-    2: [  # Redes
-        (
-            "VPN desconectando",
-            "Erro de autenticação SSL ao conectar de home office.",
-            "Redes",
-            "Incidente",
-            "Alta",
-        ),
-        (
-            "Oscilação no Wi-Fi corporativo",
-            "Sinal caindo constantemente na sala de reuniões 3.",
-            "Redes",
-            "Incidente",
-            "Alta",
-        ),
-    ],
-    3: [  # Acessos
-        (
-            "Esqueci minha senha de rede",
-            "Digitei a senha incorreta 3 vezes e bloqueou no AD.",
-            "Acessos",
-            "Solicitacao",
-            "Alta",
-        ),
-        (
-            "Solicitação de acesso ao ERP",
-            "Novo colaborador do financeiro precisa de perfil de leitura.",
-            "Acessos",
-            "Solicitacao",
-            "Baixa",
-        ),
-    ],
-}
 
-BOUNDARY_AND_AMBIGUOUS = {
-    81: (
-        "Oscilação intermitente no link secundário",
-        "Queda rápida de pacotes na filial durante backup noturno, já voltou ao normal mas requer verificação da rota.",
-        "Redes",
-        "Incidente",
-        "Alta",
-        "Redes",
-        0.85,
-        "Caso B (No limiar exato: 0.85)",
-    ),
-    82: (
-        "Lentidão pontual no acesso ao portal interno",
-        "Sistema web responde com atraso no setor comercial após troca de switch, requer verificação de rota.",
-        "Redes",
-        "Incidente",
-        "Media",
-        "Redes",
-        0.85,
-        "Caso B (No limiar exato: 0.85)",
-    ),
-    83: (
-        "Problema no sistema",
-        "Dá erro quando tento salvar, mas às vezes vai. Verificar.",
-        "Software",
-        "Duvida",
-        "Media",
-        "Acessos",
-        0.73,
-        "Ambíguo (Abaixo do limiar < 0.85)",
-    ),
-    84: (
-        "Estação desligando sozinha",
-        "O gabinete apita e desliga do nada, não sei se é fonte ou placa.",
-        "Hardware",
-        "Incidente",
-        "Media",
-        "Hardware",
-        0.84,
-        "Caso C (Abaixo do limiar: 0.84)",
-    ),
-    85: (
-        "Liberar acesso total",
-        "Preciso de permissão de administrador geral no servidor de produção.",
-        "Acessos",
-        "Solicitacao",
-        "Critica",
-        "Acessos",
-        0.92,
-        "Caso D (Crítico com confiança alta: 0.92 + revisão obrigatória)",
-    ),
-    86: (
-        "Erro 0x80040115",
-        "Apareceu essa janela na tela e fechou tudo que eu estava fazendo.",
-        "Software",
-        "Incidente",
-        "Media",
-        "Acessos",
-        0.76,
-        "Ambíguo (Abaixo do limiar < 0.85)",
-    ),
-    87: (
-        "Solicitação de acesso irrestrito",
-        "Usuário pede permissão de administrador local e acesso ao cofre de senhas.",
-        "Acessos",
-        "Solicitacao",
-        "Critica",
-        "Acessos",
-        round(0.55 + ((87 % 28) * 0.01), 2),
-        "Crítico (Segurança)",
-    ),
-    88: (
-        "Ruído anormal no desktop",
-        "Máquina reiniciando aleatoriamente com cheiro de componente aquecido.",
-        "Hardware",
-        "Incidente",
-        "Alta",
-        "Hardware",
-        round(0.55 + ((88 % 28) * 0.01), 2),
-        "Ambíguo/Crítico (< 0.85)",
-    ),
-    89: (
-        "Aplicativo corporativo travando",
-        "O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro.",
-        "Software",
-        "Incidente",
-        "Media",
-        "Software",
-        round(0.55 + ((89 % 28) * 0.01), 2),
-        "Ambíguo (< 0.85)",
-    ),
-    90: (
-        "Não funciona nada aqui",
-        "O sistema parou depois que mexeram ontem, não sei se é rede ou PC.",
-        "Hardware",
-        "Outros",
-        "Alta",
-        "Acessos",
-        0.80,
-        "Ambíguo (< 0.85)",
-    ),
-    91: (
-        "Permissão temporária de root",
-        "Solicito acesso administrativo irrestrito ao banco de dados para auditoria externa.",
-        "Acessos",
-        "Solicitacao",
-        "Critica",
-        "Acessos",
-        round(0.55 + ((91 % 28) * 0.01), 2),
-        "Crítico (Segurança)",
-    ),
-    92: (
-        "Ruído intermitente no nobreak",
-        "Equipamento do rack apresenta bipes ocasionais sem queda de energia aparente.",
-        "Hardware",
-        "Incidente",
-        "Media",
-        "Hardware",
-        round(0.55 + ((92 % 28) * 0.01), 2),
-        "Ambíguo (< 0.85)",
-    ),
-    93: (
-        "Falha intermitente na integração fiscal",
-        "Notas ficam presas na fila sem mensagem conclusiva de erro.",
-        "Software",
-        "Incidente",
-        "Media",
-        "Software",
-        round(0.55 + ((93 % 28) * 0.01), 2),
-        "Ambíguo (< 0.85)",
-    ),
-    94: (
-        "Acesso externo urgente",
-        "Preciso liberar portas no firewall para um fornecedor hoje.",
-        "Redes",
-        "Solicitacao",
-        "Critica",
-        "Redes",
-        round(0.55 + ((94 % 28) * 0.01), 2),
-        "Crítico (Segurança/Firewall)",
-    ),
-    95: (
-        "Compartilhamento de credencial setorial",
-        "Solicito criação de usuário genérico sem rastreio individual para equipe terceirizada.",
-        "Acessos",
-        "Solicitacao",
-        "Critica",
-        "Acessos",
-        round(0.55 + ((95 % 28) * 0.01), 2),
-        "Crítico (Segurança)",
-    ),
-    96: (
-        "Superaquecimento em estação de engenharia",
-        "Computador reinicia durante renderização pesada, suspeita de cooler.",
-        "Hardware",
-        "Incidente",
-        "Alta",
-        "Hardware",
-        round(0.55 + ((96 % 28) * 0.01), 2),
-        "Ambíguo (< 0.85)",
-    ),
-    97: (
-        "Conflito após atualização do ERP",
-        "Módulo de faturamento exibe tela branca para parte dos usuários.",
-        "Software",
-        "Incidente",
-        "Alta",
-        "Software",
-        round(0.55 + ((97 % 28) * 0.01), 2),
-        "Ambíguo (< 0.85)",
-    ),
-    98: (
-        "Abertura emergencial de firewall",
-        "Solicito liberação imediata de faixa de IPs externos na DMZ.",
-        "Redes",
-        "Solicitacao",
-        "Critica",
-        "Redes",
-        round(0.55 + ((98 % 28) * 0.01), 2),
-        "Crítico (Segurança/Firewall)",
-    ),
-    99: (
-        "Elevação de privilégio no Active Directory",
-        "Usuário solicita inclusão imediata no grupo Domain Admins.",
-        "Acessos",
-        "Solicitacao",
-        "Critica",
-        "Acessos",
-        round(0.55 + ((99 % 28) * 0.01), 2),
-        "Crítico (Segurança)",
-    ),
-    100: (
-        "Lentidão severa entre matriz e filial",
-        "Túnel IPsec apresenta perda intermitente de pacotes em horários aleatórios.",
-        "Redes",
-        "Incidente",
-        "Alta",
-        "Redes",
-        round(0.55 + ((100 % 28) * 0.01), 2),
-        "Ambíguo (< 0.85)",
-    ),
-}
-
-
-def get_email(i: int) -> str:
-    explicit = {
-        1: "carlos.souza@empresa.com",
-        2: "mariana.costa@empresa.com",
-        3: "joao.pereira@empresa.com",
-        4: "fernanda.lima@empresa.com",
-        5: "ricardo.alves@empresa.com",
-        6: "juliana.rocha@empresa.com",
-        80: "patricia.gomes@empresa.com",
-        81: "lucas.martins@empresa.com",
-        82: "fernanda.lima@empresa.com",
-        83: "mariana.costa@empresa.com",
-        84: "joao.pereira@empresa.com",
-        85: "carlos.souza@empresa.com",
-        86: "ricardo.alves@empresa.com",
-        90: "ana.silva@empresa.com",
-    }
-    return explicit.get(i, EMAILS[i % 9])
-
-
-def build_records() -> list[dict[str, Any]]:
-    base_ts = datetime(2026, 11, 8, 14, 10, 0, tzinfo=timezone.utc)
-    records: list[dict[str, Any]] = []
-
-    for i in range(1, 101):
-        ticket_id = 2000 + i
-        created_at = (base_ts + timedelta(seconds=i * 2)).isoformat()
-        email = get_email(i)
-
-        if i <= 80:
-            tipo_cenario = "Padronizado"
-            if i == 1:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[3][0]
-                urgencia = "Alta"
-            elif i == 2:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[3][1]
-            elif i == 3:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[0][0]
-            elif i == 4:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[2][0]
-            elif i == 5:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[1][0]
-            elif i == 6:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[0][1]
-            elif i == 7:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[1][1]
-            elif i == 8:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[2][1]
-            elif i in (15, 55, 79):
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[3][1]
-            elif i in (28, 68):
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[0][1]
-            elif i == 42:
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[2][0]
-            else:
-                variant = (i // 4) % 2
-                title, desc, cat_gold, intencao, urgencia = STANDARD_CASES[i % 4][variant]
-
-            # Divergências semânticas documentadas (6 em 80 -> 92.5% de acurácia)
-            if i in (15, 55, 79):
-                cat_pred = "Software"
-            elif i in (28, 68):
-                cat_pred = "Redes"
-            elif i == 42:
-                cat_pred = "Acessos"
-            else:
-                cat_pred = cat_gold
-
-            if i == 1:
-                confianca = 0.95
-            elif i == 80:
-                confianca = 0.86
-            else:
-                confianca = round(0.86 + ((i % 13) * 0.01), 2)
-
-            observacao = (
-                "Caso A (Limite superior: 0.86)" if i == 80 else "Cenário padronizado N1"
-            )
-            requer_revisao = False
-        else:
-            tipo_cenario = "Ambiguo_Critico"
-            (
-                title,
-                desc,
-                cat_gold,
-                intencao,
-                urgencia,
-                cat_pred,
-                confianca,
-                observacao,
-            ) = BOUNDARY_AND_AMBIGUOUS[i]
-            requer_revisao = i > 82
-
-        # Regra do gateway condicional do fluxo n8n:
-        # confianca >= 0.85 AND requer_revisao_humana == False
-        automatico = (confianca >= 0.85) and (not requer_revisao)
-        status = "Automatico" if automatico else "Revisao Humana"
-
-        if i == 1:
-            resposta = (
-                "Olá! Identificamos o bloqueio da sua conta no Active Directory. Seu acesso foi "
-                "desbloqueado e um link seguro para redefinição de senha foi enviado para o seu "
-                "e-mail corporativo. Por favor, siga as instruções para cadastrar a nova senha."
-            )
-        elif automatico:
-            resposta = (
-                "Prezado(a), sua solicitação foi triada automaticamente e encaminhada para "
-                "atendimento conforme procedimento padrão."
-            )
-        elif i == 85:
-            resposta = (
-                "Solicitação crítica de privilégio administrativo encaminhada obrigatoriamente "
-                "para revisão e aprovação humana (Human-in-the-Loop), apesar da alta confiança "
-                "na categorização."
-            )
-        else:
-            resposta = (
-                "Chamado encaminhado para revisão técnica (Human-in-the-Loop) devido a "
-                "escore de confiança inferior a 0.85 ou alta criticidade."
-            )
-
-        conteudo_original = f"{title} - {desc}"
-        tempo_ms = 1400 + ((i * 37) % 1000)
-
-        if tipo_cenario == "Padronizado":
-            acerto_categorial = "Sim" if cat_pred == cat_gold else "Nao"
-        else:
-            acerto_categorial = "N/A (Ambiguo/Critico)"
-
-        records.append(
-            {
-                "indice": i,
-                "glpi_ticket_id": ticket_id,
-                "created_at": created_at,
-                "remetente_email": email,
-                "ticket_title": title,
-                "ticket_description": desc,
-                "conteudo_original": conteudo_original,
-                "tipo_cenario": tipo_cenario,
-                "categoria_gabarito": cat_gold,
-                "intencao_gabarito": intencao,
-                "roteamento_esperado": status,
-                "intencao_classificada": intencao,
-                "nivel_urgencia": urgencia,
-                "categoria_sugerida": cat_pred,
-                "confianca_ia": confianca,
-                "requer_revisao_humana": requer_revisao,
-                "status_processamento": status,
-                "resposta_sugerida": resposta,
-                "tempo_processamento_ms_snapshot": tempo_ms,
-                "acerto_categorial": acerto_categorial,
-                "observacao": observacao,
-                "origem_dados": "Snapshot SQL deterministico (database/schema.sql)",
-            }
-        )
-
-    return records
-
-
-def verify_workflow_and_sql() -> dict[str, Any]:
-    workflow = json.loads(WORKFLOW_PATH.read_text(encoding="utf-8"))
+def verify_workflow_and_secrets() -> dict[str, Any]:
+    wf_text = WORKFLOW_PATH.read_text(encoding="utf-8")
+    workflow = json.loads(wf_text)
     nodes = {node["name"]: node for node in workflow["nodes"]}
+    settings = workflow.get("settings", {})
 
     gemini_node = nodes["Google Gemini Chat Model"]
     agent_node = nodes["Agente Cognitivo LLM (Parsing)"]
@@ -485,27 +66,52 @@ def verify_workflow_and_sql() -> dict[str, Any]:
     parser_node = nodes["Structured Output Parser"]
     http_auto = nodes["Atualiza Chamado no GLPI (API)"]
     http_human = nodes["Desvio para Fila Humana (Human-in-the-Loop)"]
+    supabase_node = nodes["Registra Auditoria no Supabase"]
 
-    sql_text = SCHEMA_PATH.read_text(encoding="utf-8")
+    tempo_expr = next(
+        fv["fieldValue"]
+        for fv in supabase_node["parameters"]["fieldsUi"]["fieldValues"]
+        if fv["fieldId"] == "tempo_processamento_ms"
+    )
+    assert "1900" not in wf_text, "Fallback artificial 1900 ainda presente no workflow"
+    assert "timestamp_inicio_ms" in tempo_expr and "Date.now()" in tempo_expr
+    assert settings.get("saveDataSuccessExecution") == "all"
+    assert settings.get("saveDataErrorExecution") == "all"
+    assert settings.get("saveManualExecutions") is True
 
-    # Garantia de que não há credenciais/tokens reais expostos no repositório
     secret_patterns = [
         r"AIza[0-9A-Za-z\-_]{20,}",
+        r"AQ\.Ab8[0-9A-Za-z\-_]{20,}",
         r"eyJ[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}",
         r"sk-[A-Za-z0-9]{20,}",
+        r"sb_secret_[0-9A-Za-z\-_]{10,}",
+        r"sb_publishable_[0-9A-Za-z\-_]{10,}",
+    ]
+    scan_paths = [
+        WORKFLOW_PATH,
+        SCHEMA_PATH,
+        ROOT_DIR / "README.md",
+        ROOT_DIR / "database" / "README.md",
+        ROOT_DIR / "prompts" / "system-prompt-ia.md",
+        *DATA_DIR.glob("*"),
+        *EVIDENCIAS_DIR.glob("*"),
     ]
     leaks = []
-    for path in [WORKFLOW_PATH, SCHEMA_PATH]:
-        txt = path.read_text(encoding="utf-8")
+    for path in scan_paths:
+        if not path.is_file():
+            continue
+        txt = path.read_text(encoding="utf-8", errors="ignore")
         for pat in secret_patterns:
             if re.search(pat, txt):
-                leaks.append(str(path))
-
+                leaks.append(f"{path.relative_to(ROOT_DIR)} ({pat})")
     assert not leaks, f"Possível token/chave encontrado em: {leaks}"
+
+    sql_text = SCHEMA_PATH.read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS chamados_triagem" in sql_text
     assert "CREATE INDEX IF NOT EXISTS idx_chamados_triagem_status" in sql_text
 
     return {
+        "workflow_id": workflow.get("id"),
         "workflow_name": workflow["name"],
         "node_count": len(workflow["nodes"]),
         "gemini_model": gemini_node["parameters"]["modelName"],
@@ -513,41 +119,219 @@ def verify_workflow_and_sql() -> dict[str, Any]:
         "parser_type": parser_node["type"],
         "system_message": agent_node["parameters"]["options"]["systemMessage"],
         "if_threshold": if_node["parameters"]["conditions"]["number"][0]["value2"],
+        "tempo_expr": tempo_expr,
         "http_auto_url": http_auto["parameters"]["url"],
         "http_human_url": http_human["parameters"]["url"],
+        "save_success": settings.get("saveDataSuccessExecution"),
+        "save_error": settings.get("saveDataErrorExecution"),
+        "save_manual": settings.get("saveManualExecutions"),
         "secret_scan_clean": True,
     }
 
 
-def run_httpbin_boundary_tests(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    target_ids = [2001, 2080, 2081, 2084, 2085]
-    by_id = {r["glpi_ticket_id"]: r for r in records}
-    results = []
+def load_and_verify_dataset() -> tuple[list[dict[str, Any]], dict[int, dict[str, Any]]]:
+    tickets = json.loads((DATA_DIR / "chamados_sinteticos_100.json").read_text(encoding="utf-8"))
+    with (DATA_DIR / "gabarito_classificacao_100.csv").open("r", encoding="utf-8-sig") as f:
+        gabarito_rows = list(csv.DictReader(f))
 
-    for tid in target_ids:
-        rec = by_id[tid]
-        # Avalia exatamente as mesmas 2 condições do nó IF do n8n
-        cond_boolean = rec["requer_revisao_humana"] is False
-        cond_number = rec["confianca_ia"] >= 0.85
+    assert len(tickets) == 100
+    assert len(gabarito_rows) == 100
+
+    by_id = {int(t["ticket_id"]): t for t in tickets}
+    assert set(by_id.keys()) == set(range(2001, 2101))
+
+    for g in gabarito_rows:
+        tid = int(g["ticket_id"])
+        t = by_id[tid]
+        assert t["categoria_gabarito"] == g["categoria_gabarito"]
+        assert t["intencao_gabarito"] == g["intencao_gabarito"]
+        assert t["roteamento_esperado"] == g["roteamento_esperado"]
+        assert t["tipo_cenario"] == g["tipo_cenario"]
+
+    assert sum(1 for t in tickets if t["tipo_cenario"] == "Padronizado") == 80
+    assert sum(1 for t in tickets if t["tipo_cenario"] == "Ambiguo_Critico") == 20
+    for cat in ("Hardware", "Software", "Redes", "Acessos"):
+        assert sum(1 for t in tickets if t["categoria_gabarito"] == cat) == 25
+        assert (
+            sum(
+                1
+                for t in tickets
+                if t["tipo_cenario"] == "Padronizado" and t["categoria_gabarito"] == cat
+            )
+            == 20
+        )
+
+    return tickets, by_id
+
+
+def load_and_verify_n8n_and_supabase(
+    tickets_by_id: dict[int, dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    logs_doc = json.loads(
+        (EVIDENCIAS_DIR / "logs_execucao_n8n_100.json").read_text(encoding="utf-8")
+    )
+    results = json.loads(
+        (EVIDENCIAS_DIR / "resultados_execucao_100.json").read_text(encoding="utf-8")
+    )
+    with (EVIDENCIAS_DIR / "resultados_execucao_100.csv").open("r", encoding="utf-8-sig") as f:
+        csv_rows = list(csv.DictReader(f))
+
+    execucoes = logs_doc["execucoes"]
+    assert len(execucoes) == 100
+    assert len(results) == 100
+    assert len(csv_rows) == 100
+
+    exec_by_ticket = {int(e["glpi_ticket_id"]): e for e in execucoes}
+    res_by_ticket = {int(r["glpi_ticket_id"]): r for r in results}
+    csv_by_ticket = {int(c["glpi_ticket_id"]): c for c in csv_rows}
+    expected_ids = set(range(2001, 2101))
+    assert set(exec_by_ticket.keys()) == expected_ids
+    assert set(res_by_ticket.keys()) == expected_ids
+    assert set(csv_by_ticket.keys()) == expected_ids
+
+    for tid in range(2001, 2101):
+        ev = exec_by_ticket[tid]
+        res = res_by_ticket[tid]
+        csv_r = csv_by_ticket[tid]
+        t = tickets_by_id[tid]
+
+        assert ev["status"] == "success" and ev["finished"] is True
+        traces = ev["node_traces"]
+        assert traces["Webhook GLPI (Novo Chamado)"]["input_body"]["ticket_id"] == tid
+        gem = traces["Google Gemini Chat Model"]
+        assert gem["executionStatus"] == "success"
+        assert gem["generationInfo"]["finishReason"] == "STOP"
+        assert gem["tokenUsage"]["totalTokens"] > 0
+
+        parsed = traces["Structured Output Parser"]["parsed_output"]
+        assert parsed == traces["Agente Cognitivo LLM (Parsing)"]["output"]
+
+        conf = float(parsed["confianca"])
+        rev_flag = bool(parsed["requer_revisao_humana"])
+        auto_expected = (conf >= 0.85) and (not rev_flag)
+        expected_status = "Automatico" if auto_expected else "Revisao Humana"
+
+        http_node_name = (
+            "Atualiza Chamado no GLPI (API)"
+            if auto_expected
+            else "Desvio para Fila Humana (Human-in-the-Loop)"
+        )
+        http_trace = traces[http_node_name]
+        assert http_trace["executionStatus"] == "success"
+        assert http_trace["url"] == "https://httpbin.org/post"
+        assert http_trace["httpbin_status"] == 200
+        assert str(http_trace["httpbin_echo_json"]["ticket_id"]) == str(tid)
+
+        sb_trace = traces["Registra Auditoria no Supabase"]
+        assert sb_trace["executionStatus"] == "success"
+        assert sb_trace["supabase_record_id"] == res["supabase_id"]
+        assert int(sb_trace["tempo_processamento_ms"]) == int(res["tempo_processamento_ms"])
+        assert int(res["n8n_execution_id"]) == int(ev["n8n_execution_id"])
+
+        assert res["conteudo_original"] == t["conteudo_original"]
+        assert res["categoria_sugerida"] == parsed["categoria_glpi"]
+        assert res["intencao_classificada"] == parsed["intencao"]
+        assert res["nivel_urgencia"] == parsed["urgencia"]
+        assert abs(float(res["confianca_ia"]) - conf) < 1e-6
+        assert res["status_processamento"] == expected_status
+        assert res["requer_revisao_humana"] == (not auto_expected)
+        assert csv_r["supabase_id"] == res["supabase_id"]
+        assert int(csv_r["n8n_execution_id"]) == int(res["n8n_execution_id"])
+        assert csv_r["status_processamento"] == res["status_processamento"]
+
+    return logs_doc, execucoes, results
+
+
+def verify_sql_parity(results: list[dict[str, Any]]) -> None:
+    """Valida em SQLite em memória que database/schema.sql contém os 100 registros reais."""
+    sql_text = SCHEMA_PATH.read_text(encoding="utf-8")
+    m = re.search(
+        r"(INSERT INTO chamados_triagem\s*\(.*?\)\s*VALUES\s*.*?);",
+        sql_text,
+        re.S,
+    )
+    assert m, "Bloco INSERT INTO chamados_triagem ... VALUES não encontrado em database/schema.sql"
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        """
+        CREATE TABLE chamados_triagem (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            glpi_ticket_id INTEGER,
+            remetente_email TEXT NOT NULL,
+            conteudo_original TEXT NOT NULL,
+            intencao_classificada TEXT NOT NULL,
+            nivel_urgencia TEXT NOT NULL,
+            categoria_sugerida TEXT,
+            confianca_ia REAL NOT NULL,
+            status_processamento TEXT NOT NULL,
+            resposta_sugerida TEXT,
+            requer_revisao_humana INTEGER DEFAULT 0,
+            tempo_processamento_ms INTEGER
+        );
+        """
+    )
+    conn.execute(m.group(1))
+    rows = conn.execute(
+        "SELECT id, created_at, glpi_ticket_id, remetente_email, conteudo_original, "
+        "intencao_classificada, nivel_urgencia, categoria_sugerida, confianca_ia, "
+        "status_processamento, resposta_sugerida, requer_revisao_humana, tempo_processamento_ms "
+        "FROM chamados_triagem ORDER BY glpi_ticket_id"
+    ).fetchall()
+    conn.close()
+
+    expected = sorted(results, key=lambda r: int(r["glpi_ticket_id"]))
+    assert len(rows) == len(expected) == 100
+
+    for row, rec in zip(rows, expected):
+        assert row[0] == rec["supabase_id"]
+        assert row[1] == rec["created_at"]
+        assert row[2] == rec["glpi_ticket_id"]
+        assert row[3] == rec["remetente_email"]
+        assert row[4] == rec["conteudo_original"]
+        assert row[5] == rec["intencao_classificada"]
+        assert row[6] == rec["nivel_urgencia"]
+        assert row[7] == rec["categoria_sugerida"]
+        assert abs(float(row[8]) - float(rec["confianca_ia"])) < 1e-6
+        assert row[9] == rec["status_processamento"]
+        assert row[10] == rec["resposta_sugerida"]
+        assert bool(row[11]) == bool(rec["requer_revisao_humana"])
+        assert int(row[12]) == int(rec["tempo_processamento_ms"])
+
+
+def run_httpbin_boundary_tests(
+    tickets_by_id: dict[int, dict[str, Any]],
+    results_by_id: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    results = []
+    for tid, desc_caso, conf_teste, rev_teste, expected_status in BOUNDARY_CASES:
+        t = tickets_by_id[tid]
+        real_rec = results_by_id[tid]
+
+        cond_boolean = rev_teste is False
+        cond_number = conf_teste >= 0.85
         routed_auto = cond_boolean and cond_number
+        status_eval = "Automatico" if routed_auto else "Revisao Humana"
+        assert status_eval == expected_status
 
         if routed_auto:
             branch = "Atualiza Chamado no GLPI (API)"
             payload = {
-                "ticket_id": str(rec["glpi_ticket_id"]),
+                "ticket_id": str(tid),
                 "status": "Triado Automaticamente",
-                "categoria": rec["categoria_sugerida"],
-                "confianca": rec["confianca_ia"],
+                "categoria": real_rec["categoria_sugerida"],
+                "confianca": conf_teste,
             }
         else:
             branch = "Desvio para Fila Humana (Human-in-the-Loop)"
             alerta = (
                 "Score de confianca inferior ao limiar de 0.85"
-                if rec["confianca_ia"] < 0.85
+                if conf_teste < 0.85
                 else "Revisao humana obrigatoria por alta criticidade ou ambiguidade"
             )
             payload = {
-                "ticket_id": str(rec["glpi_ticket_id"]),
+                "ticket_id": str(tid),
                 "status": "Aguardando Revisao Humana",
                 "alerta": alerta,
             }
@@ -555,10 +339,9 @@ def run_httpbin_boundary_tests(records: list[dict[str, Any]]) -> list[dict[str, 
         req = urllib.request.Request(
             "https://httpbin.org/post",
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", "User-Agent": "tcc-poc-validator/1.0"},
+            headers={"Content-Type": "application/json", "User-Agent": "tcc-poc-validator/2.0"},
             method="POST",
         )
-
         start = time.perf_counter()
         try:
             with urllib.request.urlopen(req, timeout=20) as resp:
@@ -578,26 +361,42 @@ def run_httpbin_boundary_tests(records: list[dict[str, Any]]) -> list[dict[str, 
         results.append(
             {
                 "glpi_ticket_id": tid,
-                "caso_teste": rec["observacao"],
+                "caso_teste": desc_caso,
+                "executor_teste": "Script Python (scripts/validar_poc.py via urllib.request)",
+                "executado_no_n8n": False,
+                "inferencia_gemini_real": False,
+                "nota_metodologica": (
+                    "Teste controlado de Análise de Valor-Limite executado diretamente via Python "
+                    "contra httpbin.org/post para exercitar os exatos escores de fronteira (0.84, "
+                    "0.85, 0.86 e crítico 0.92). A execução ao vivo do mesmo chamado no n8n+Gemini "
+                    "consta em evidencias/logs_execucao_n8n_100.json."
+                ),
                 "input_ticket": {
                     "ticket_id": tid,
-                    "user_email": rec["remetente_email"],
-                    "ticket_title": rec["ticket_title"],
-                    "ticket_description": rec["ticket_description"],
+                    "user_email": t["user_email"],
+                    "ticket_title": t["ticket_title"],
+                    "ticket_description": t["ticket_description"],
                 },
                 "llm_output_simulado": {
-                    "intencao": rec["intencao_classificada"],
-                    "urgencia": rec["nivel_urgencia"],
-                    "categoria_glpi": rec["categoria_sugerida"],
-                    "confianca": rec["confianca_ia"],
-                    "requer_revisao_humana": rec["requer_revisao_humana"],
+                    "intencao": real_rec["intencao_classificada"],
+                    "urgencia": real_rec["nivel_urgencia"],
+                    "categoria_glpi": real_rec["categoria_sugerida"],
+                    "confianca": conf_teste,
+                    "requer_revisao_humana": rev_teste,
+                },
+                "execucao_real_n8n_referencia": {
+                    "n8n_execution_id": real_rec["n8n_execution_id"],
+                    "confianca_gemini": real_rec["confianca_ia"],
+                    "requer_revisao_gemini": real_rec["requer_revisao_humana"],
+                    "status_processamento": real_rec["status_processamento"],
+                    "tempo_processamento_ms": real_rec["tempo_processamento_ms"],
                 },
                 "avaliacao_no_if": {
                     "cond_requer_revisao_false": cond_boolean,
                     "cond_confianca_maior_igual_0_85": cond_number,
                     "resultado_gateway": routed_auto,
                     "ramo_n8n": branch,
-                    "status_processamento": rec["status_processamento"],
+                    "status_processamento": status_eval,
                 },
                 "emulacao_httpbin": {
                     "endpoint": endpoint_url,
@@ -611,293 +410,237 @@ def run_httpbin_boundary_tests(records: list[dict[str, Any]]) -> list[dict[str, 
             }
         )
 
+    (EVIDENCIAS_DIR / "testes_valor_limite_httpbin.json").write_text(
+        json.dumps(results, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return results
 
 
-def export_artifacts(
-    records: list[dict[str, Any]],
+def generate_summary_markdown(
     tech_config: dict[str, Any],
+    logs_doc: dict[str, Any],
+    execucoes: list[dict[str, Any]],
+    results: list[dict[str, Any]],
     boundary_results: list[dict[str, Any]],
-) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    EVIDENCIAS_DIR.mkdir(parents=True, exist_ok=True)
+) -> dict[str, Any]:
+    results = sorted(results, key=lambda r: int(r["glpi_ticket_id"]))
+    padronizados = [r for r in results if r["tipo_cenario"] == "Padronizado"]
+    ambiguos = [r for r in results if r["tipo_cenario"] == "Ambiguo_Critico"]
 
-    # 1. Conjunto de entrada dos 100 chamados sintéticos
-    input_tickets = [
-        {
-            "ticket_id": r["glpi_ticket_id"],
-            "user_email": r["remetente_email"],
-            "ticket_title": r["ticket_title"],
-            "ticket_description": r["ticket_description"],
-            "conteudo_original": r["conteudo_original"],
-            "tipo_cenario": r["tipo_cenario"],
-            "categoria_gabarito": r["categoria_gabarito"],
-            "intencao_gabarito": r["intencao_gabarito"],
-            "roteamento_esperado": r["roteamento_esperado"],
-        }
-        for r in records
-    ]
-    (DATA_DIR / "chamados_sinteticos_100.json").write_text(
-        json.dumps(input_tickets, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    acertos_pad_cat = [r for r in padronizados if r["categoria_sugerida"] == r["categoria_gabarito"]]
+    acertos_pad_int = [r for r in padronizados if r["intencao_classificada"] == r["intencao_gabarito"]]
+    acertos_tot_cat = [r for r in results if r["categoria_sugerida"] == r["categoria_gabarito"]]
+    acertos_tot_int = [r for r in results if r["intencao_classificada"] == r["intencao_gabarito"]]
+    acertos_rout = [r for r in results if r["status_processamento"] == r["roteamento_esperado"]]
 
-    # 2. Gabarito de classificação em CSV
-    gabarito_fields = [
-        "ticket_id",
-        "tipo_cenario",
-        "categoria_gabarito",
-        "intencao_gabarito",
-        "roteamento_esperado",
-        "conteudo_original",
-    ]
-    with (DATA_DIR / "gabarito_classificacao_100.csv").open(
-        "w", encoding="utf-8-sig", newline=""
-    ) as f:
-        writer = csv.DictWriter(f, fieldnames=gabarito_fields)
-        writer.writeheader()
-        for t in input_tickets:
-            writer.writerow({k: t[k] for k in gabarito_fields})
+    automaticos = [r for r in results if r["status_processamento"] == "Automatico"]
+    revisao = [r for r in results if r["status_processamento"] == "Revisao Humana"]
+    rev_low_conf = [r for r in revisao if float(r["confianca_ia"]) < 0.85]
+    rev_crit_high = [r for r in revisao if float(r["confianca_ia"]) >= 0.85]
 
-    # 3. Resultados completos da execução (JSON + CSV)
-    (EVIDENCIAS_DIR / "resultados_execucao_100.json").write_text(
-        json.dumps(records, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    lat_e2e = [int(r["tempo_processamento_ms"]) for r in results]
+    mean_e2e = statistics.mean(lat_e2e)
+    median_e2e = statistics.median(lat_e2e)
+    min_rec = min(results, key=lambda r: int(r["tempo_processamento_ms"]))
+    max_rec = max(results, key=lambda r: int(r["tempo_processamento_ms"]))
 
-    exec_fields = [
-        "glpi_ticket_id",
-        "created_at",
-        "remetente_email",
-        "conteudo_original",
-        "tipo_cenario",
-        "categoria_gabarito",
-        "categoria_sugerida",
-        "acerto_categorial",
-        "intencao_classificada",
-        "nivel_urgencia",
-        "confianca_ia",
-        "requer_revisao_humana",
-        "status_processamento",
-        "tempo_processamento_ms_snapshot",
-        "observacao",
-        "origem_dados",
-    ]
-    with (EVIDENCIAS_DIR / "resultados_execucao_100.csv").open(
-        "w", encoding="utf-8-sig", newline=""
-    ) as f:
-        writer = csv.DictWriter(f, fieldnames=exec_fields)
-        writer.writeheader()
-        for r in records:
-            writer.writerow({k: r[k] for k in exec_fields})
+    gem_nodes = [e["node_traces"]["Google Gemini Chat Model"] for e in execucoes]
+    gem_lat = [int(g["executionTime_ms"]) for g in gem_nodes]
+    mean_gem = statistics.mean(gem_lat)
+    median_gem = statistics.median(gem_lat)
+    min_gem, max_gem = min(gem_lat), max(gem_lat)
 
-    # 4. Evidência dos testes de limite contra httpbin.org
-    (EVIDENCIAS_DIR / "testes_valor_limite_httpbin.json").write_text(
-        json.dumps(boundary_results, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    # 5. Cálculo e conferência dos indicadores
-    total = len(records)
-    padronizados = [r for r in records if r["tipo_cenario"] == "Padronizado"]
-    ambiguos = [r for r in records if r["tipo_cenario"] == "Ambiguo_Critico"]
-
-    acertos = [r for r in padronizados if r["acerto_categorial"] == "Sim"]
-    divergencias = [r for r in padronizados if r["acerto_categorial"] == "Nao"]
-    acuracia_pct = (len(acertos) / len(padronizados)) * 100
-
-    automaticos = [r for r in records if r["status_processamento"] == "Automatico"]
-    revisao = [r for r in records if r["status_processamento"] == "Revisao Humana"]
-
-    dist_gabarito = Counter(r["categoria_gabarito"] for r in records)
-    dist_padronizado_gabarito = Counter(r["categoria_gabarito"] for r in padronizados)
+    prompt_tokens = sum(int(g["tokenUsage"]["promptTokens"]) for g in gem_nodes)
+    comp_tokens = sum(int(g["tokenUsage"]["completionTokens"]) for g in gem_nodes)
+    total_tokens = sum(int(g["tokenUsage"]["totalTokens"]) for g in gem_nodes)
+    retries_429 = logs_doc["metadados_execucao"].get("tentativas_transientes_retry_429", 0)
 
     cats = ["Hardware", "Software", "Redes", "Acessos"]
-    matriz = {g: {p: 0 for p in cats} for g in cats}
+    matriz_pad = {g: {p: 0 for p in cats} for g in cats}
     for r in padronizados:
-        matriz[r["categoria_gabarito"]][r["categoria_sugerida"]] += 1
+        matriz_pad[r["categoria_gabarito"]][r["categoria_sugerida"]] += 1
 
-    assert total == 100
-    assert len(padronizados) == 80
-    assert len(ambiguos) == 20
-    assert len(acertos) == 74
-    assert len(divergencias) == 6
-    assert len(automaticos) == 82
-    assert len(revisao) == 18
-    assert all(dist_gabarito[c] == 25 for c in cats)
-    assert all(dist_padronizado_gabarito[c] == 20 for c in cats)
+    matriz_tot = {g: {p: 0 for p in cats} for g in cats}
+    for r in results:
+        matriz_tot[r["categoria_gabarito"]][r["categoria_sugerida"]] += 1
 
-    # Monta resumo markdown
-    linhas_div = "\n".join(
-        f"| {r['glpi_ticket_id']} | {r['conteudo_original']} | {r['categoria_gabarito']} | {r['categoria_sugerida']} | {r['confianca_ia']:.2f} | {r['status_processamento']} |"
-        for r in divergencias
+    linhas_m_pad = "\n".join(
+        f"| **{g}** | {matriz_pad[g]['Hardware']} | {matriz_pad[g]['Software']} | {matriz_pad[g]['Redes']} | {matriz_pad[g]['Acessos']} | {sum(matriz_pad[g].values())} |"
+        for g in cats
     )
-
-    linhas_matriz = "\n".join(
-        f"| **{g}** | {matriz[g]['Hardware']} | {matriz[g]['Software']} | {matriz[g]['Redes']} | {matriz[g]['Acessos']} | {sum(matriz[g].values())} |"
+    linhas_m_tot = "\n".join(
+        f"| **{g}** | {matriz_tot[g]['Hardware']} | {matriz_tot[g]['Software']} | {matriz_tot[g]['Redes']} | {matriz_tot[g]['Acessos']} | {sum(matriz_tot[g].values())} |"
         for g in cats
     )
 
+    div_rows = [
+        r
+        for r in results
+        if (
+            r["categoria_sugerida"] != r["categoria_gabarito"]
+            or r["intencao_classificada"] != r["intencao_gabarito"]
+            or r["status_processamento"] != r["roteamento_esperado"]
+        )
+    ]
+    linhas_div = "\n".join(
+        f"| {r['glpi_ticket_id']} | {r['n8n_execution_id']} | {r['conteudo_original']} | "
+        f"{r['categoria_gabarito']} / {r['intencao_gabarito']} / {r['roteamento_esperado']} | "
+        f"{r['categoria_sugerida']} / {r['intencao_classificada']} / {r['status_processamento']} | "
+        f"{r['confianca_ia']:.2f} |"
+        for r in div_rows
+    )
+
+    by_id = {int(r["glpi_ticket_id"]): r for r in results}
+    crit_ids = [2001, 2080, 2081, 2084, 2085, 2090, 2091, 2092]
+    linhas_reais_lim = "\n".join(
+        f"| {tid} | {by_id[tid]['n8n_execution_id']} | {by_id[tid]['categoria_sugerida']} | "
+        f"{by_id[tid]['confianca_ia']:.2f} | `{str(by_id[tid]['requer_revisao_humana']).lower()}` | "
+        f"{by_id[tid]['status_processamento']} | {by_id[tid]['tempo_processamento_ms']} ms | `{by_id[tid]['supabase_id'][:8]}...` |"
+        for tid in crit_ids
+    )
+
     linhas_limite = "\n".join(
-        f"| {b['glpi_ticket_id']} | {b['caso_teste']} | {b['llm_output_simulado']['confianca']:.2f} | `{str(b['llm_output_simulado']['requer_revisao_humana']).lower()}` | {b['avaliacao_no_if']['status_processamento']} | HTTP {b['emulacao_httpbin']['http_status']} ({b['emulacao_httpbin']['latencia_http_ms']} ms) |"
+        f"| {b['glpi_ticket_id']} | {b['caso_teste']} | {b['llm_output_simulado']['confianca']:.2f} | "
+        f"`{str(b['llm_output_simulado']['requer_revisao_humana']).lower()}` | "
+        f"{b['avaliacao_no_if']['status_processamento']} | "
+        f"HTTP {b['emulacao_httpbin']['http_status']} ({b['emulacao_httpbin']['latencia_http_ms']} ms) |"
         for b in boundary_results
     )
 
-    resumo_md = f"""# Resumo de Conferência e Cálculo dos Indicadores da PoC
+    resumo_md = f"""# Resumo de Conferência e Cálculo dos Indicadores Reais da PoC
 
-## 1. Transparência sobre a Origem dos Dados e Execuções
-Para fins de auditoria acadêmica, distinguem-se explicitamente as três fontes de evidência deste repositório:
-1. **Conjunto de Entrada e Gabarito Sintético (`data/chamados_sinteticos_100.json`, `data/gabarito_classificacao_100.csv`):** 100 chamados fictícios anonimizados (25 Hardware, 25 Software, 25 Redes e 25 Acessos; sendo 80 padronizados e 20 ambíguos/críticos), criados sem dados reais de usuários.
-2. **Snapshot Determinístico em SQL (`database/schema.sql` e `evidencias/resultados_execucao_100.*`):** Carga SQL reproduzível que consolida os 100 registros de exemplo na tabela `chamados_triagem` para verificação exata dos indicadores descritos no artigo (74 acertos em 80 padronizados, 82 automáticos e 18 em revisão humana). Não representa 100 chamadas pagas executadas em ambiente produtivo real.
-3. **Execução Real da Camada de Roteamento e Emulação HTTP (`evidencias/testes_valor_limite_httpbin.json`):** Validação executada via requisição HTTP POST real para `https://httpbin.org/post` (o mesmo endpoint configurado nos nós HTTP do fluxo [`n8n-workflows/triagem-chamados-workflow.json`](../n8n-workflows/triagem-chamados-workflow.json)), comprovando o comportamento do gateway condicional nos limites `0,84`, `0,85`, `0,86` e no caso crítico com confiança alta (`0,92` + `requer_revisao_humana = true`).
+## 1. Origem das Evidências e Separação de Camadas (`N = 100`)
+Todos os 100 chamados sintéticos foram executados ao vivo pelo fluxo no **n8n v{logs_doc['metadados_execucao']['n8n_versao']}** (`workflow_id = {tech_config['workflow_id']}`), processados individualmente pelo modelo **Google Gemini (`{tech_config['gemini_model']}`, `temperature = {tech_config['temperature']}`)** com **Structured Output Parser**, encaminhados via **`{tech_config['http_auto_url']}`** (emulando saída GLPI / fila humana sem instância produtiva) e persistidos no **Supabase (`chamados_triagem`)**:
 
-> **Nota sobre o tempo de processamento:** Os valores de `tempo_processamento_ms` presentes no snapshot SQL são referências sintéticas de demonstração. Conforme explicitado na Seção 4.2.3 do artigo (p. 23), o tempo médio de `1,9 s` informado em versão preliminar não foi mantido como medição consolidada de desempenho real.
+1. **Entrada e Gabarito Sintético ([`../data/chamados_sinteticos_100.json`](../data/chamados_sinteticos_100.json), [`../data/gabarito_classificacao_100.csv`](../data/gabarito_classificacao_100.csv)):** 100 chamados fictícios anonimizados (25 Hardware, 25 Software, 25 Redes e 25 Acessos; 80 padronizados `2001..2080` e 20 ambíguos/críticos `2081..2100`).
+2. **Logs Individuais das 100 Execuções no n8n ([`logs_execucao_n8n_100.json`](logs_execucao_n8n_100.json)):** rastreamento completo nó a nó de cada uma das 100 execuções (`n8n_execution_id` com `status = "success"`), comprovando entrada do Webhook, latência e consumo de tokens do `Google Gemini Chat Model`, JSON estruturado do `Structured Output Parser`, ramo do nó `IF`, eco HTTP 200 de `https://httpbin.org/post` e UUID gravado no Supabase.
+3. **Registros Reais Persistidos no Supabase ([`resultados_execucao_100.json`](resultados_execucao_100.json), [`resultados_execucao_100.csv`](resultados_execucao_100.csv) e [`../database/schema.sql`](../database/schema.sql)):** espelho exato das 100 linhas gravadas no banco Supabase pelo nó `Registra Auditoria no Supabase`, preservando UUIDs, timestamps UTC, respostas sugeridas geradas pelo LLM e `tempo_processamento_ms` medido em tempo real.
+4. **Testes Controlados de Valor-Limite via Python ([`testes_valor_limite_httpbin.json`](testes_valor_limite_httpbin.json)):** requisições `HTTP POST` disparadas diretamente por [`../scripts/validar_poc.py`](../scripts/validar_poc.py) para `https://httpbin.org/post` avaliando exatamente os escores de fronteira `0.84`, `0.85`, `0.86` e `0.92` (`executado_no_n8n = false`, `inferencia_gemini_real = false`), complementando as execuções ao vivo do Gemini (que retornou escores em múltiplos de `0.05`: `0.50`, `0.65`, `0.70`, `0.75`, `0.80`, `0.90`, `0.95`, `1.00`).
 
 ---
 
 ## 2. Configuração Técnica Conferida
-- **Modelo LLM no fluxo n8n:** `{tech_config['gemini_model']}`
-- **Temperatura:** `{tech_config['temperature']}`
+- **Orquestrador:** n8n `v{logs_doc['metadados_execucao']['n8n_versao']}` | Workflow ID `{tech_config['workflow_id']}` ({tech_config['node_count']} nós)
+- **Histórico de execuções habilitado:** `saveDataSuccessExecution = "{tech_config['save_success']}"`, `saveDataErrorExecution = "{tech_config['save_error']}"`, `saveManualExecutions = {str(tech_config['save_manual']).lower()}`
+- **Modelo LLM:** `{tech_config['gemini_model']}` | Temperatura: `{tech_config['temperature']}`
 - **Parser JSON:** `{tech_config['parser_type']}`
-- **Limiar de confiança no nó IF:** `{tech_config['if_threshold']}` (combinado com `requer_revisao_humana == false`)
-- **Endpoints de emulação GLPI:** `{tech_config['http_auto_url']}` (ramo automático) e `{tech_config['http_human_url']}` (ramo revisão humana)
-- **Varredura de segredos/tokens nos artefatos:** Limpa (`secret_scan_clean = {tech_config['secret_scan_clean']}`)
+- **Limiar do gateway IF:** `confianca >= {tech_config['if_threshold']}` AND `requer_revisao_humana == false`
+- **Expressão `tempo_processamento_ms`:** `{tech_config['tempo_expr']}` (medição real em ms sem fallback artificial)
+- **Endpoints HTTP emulados:** `{tech_config['http_auto_url']}` (automático e revisão humana; 100/100 retornaram HTTP 200)
+- **Varredura de segredos/tokens:** Limpa (`secret_scan_clean = {tech_config['secret_scan_clean']}`)
 
 ---
 
-## 3. Indicadores Consolidados (`N = 100`)
+## 3. Indicadores Reais Medidos na Execução n8n + Gemini + Supabase (`N = 100`)
 
-| Indicador | Fórmula / Critério | Resultado Conferido |
+| Indicador | Critério / Fonte Real (`logs_execucao_n8n_100.json` + Supabase) | Valor Obtido |
 | :--- | :--- | :--- |
-| Total de chamados sintéticos | `COUNT(*)` | **100** (25 Hardware, 25 Software, 25 Redes, 25 Acessos) |
-| Cenários padronizados | `ticket_id` 2001..2080 | **80** (20 por categoria) |
-| Cenários ambíguos / críticos | `ticket_id` 2081..2100 | **20** (5 por categoria) |
-| Acertos categoriais (padronizados) | `categoria_sugerida == categoria_gabarito` em 2001..2080 | **74 de 80 ({acuracia_pct:.1f}%)** |
-| Divergências limítrofes (padronizados) | `categoria_sugerida != categoria_gabarito` em 2001..2080 | **6 de 80 ({100 - acuracia_pct:.1f}%)** |
-| Encaminhamentos automáticos | `confianca_ia >= 0.85 AND requer_revisao_humana = FALSE` | **82 de 100 (82,0%)** |
-| Encaminhamentos para revisão humana | `confianca_ia < 0.85 OR requer_revisao_humana = TRUE` | **18 de 100 (18,0%)** |
+| Chamados sintéticos processados | Execuções `status = success` no n8n e linhas no Supabase | **100 de 100 (100,0%)** |
+| Acurácia categorial (padronizados) | `categoria_sugerida == categoria_gabarito` em `2001..2080` | **{len(acertos_pad_cat)} de {len(padronizados)} ({len(acertos_pad_cat)/len(padronizados)*100:.1f}%)** |
+| Acurácia de intenção (padronizados) | `intencao_classificada == intencao_gabarito` em `2001..2080` | **{len(acertos_pad_int)} de {len(padronizados)} ({len(acertos_pad_int)/len(padronizados)*100:.1f}%)** |
+| Acurácia categorial global (`N = 100`) | `categoria_sugerida == categoria_gabarito` em `2001..2100` | **{len(acertos_tot_cat)} de 100 ({len(acertos_tot_cat):.1f}%)** |
+| Acurácia de intenção global (`N = 100`) | `intencao_classificada == intencao_gabarito` em `2001..2100` | **{len(acertos_tot_int)} de 100 ({len(acertos_tot_int):.1f}%)** |
+| Concordância de roteamento com gabarito | `status_processamento == roteamento_esperado` em `2001..2100` | **{len(acertos_rout)} de 100 ({len(acertos_rout):.1f}%)** |
+| Encaminhamento automático | `confianca_ia >= 0.85` e `requer_revisao_humana = false` | **{len(automaticos)} de 100 ({len(automaticos):.1f}%)** |
+| Encaminhamento para revisão humana | `confianca_ia < 0.85` ({len(rev_low_conf)}) ou revisão crítica obrigatória ({len(rev_crit_high)}) | **{len(revisao)} de 100 ({len(revisao):.1f}%)** |
+| Tempo total medido (Webhook -> Supabase) | Média / Mediana / Mín.–Máx. (`tempo_processamento_ms`) | **{mean_e2e:.1f} ms (~{mean_e2e/1000:.2f} s)** / Mediana **{median_e2e:.1f} ms** ({min_rec['tempo_processamento_ms']}–{max_rec['tempo_processamento_ms']} ms) |
+| Latência isolada do nó Gemini Chat Model | Média / Mediana / Mín.–Máx. (`logs_execucao_n8n_100.json`) | **{mean_gem:.1f} ms** / Mediana **{median_gem:.1f} ms** ({min_gem}–{max_gem} ms) |
+| Consumo de tokens na amostra (`N = 100`) | Soma real dos 100 logs Gemini (`prompt` + `completion`) | **{total_tokens:,}** tokens ({prompt_tokens:,} prompt + {comp_tokens:,} saída; média **{total_tokens/100:.1f}**/chamado) |
+| Retentativas transientes (HTTP 429 API) | Reenvios automáticos com *backoff* no lote de 100 disparos | **{retries_429}** retentativas transientes (100% concluídos com sucesso) |
 
 ---
 
-## 4. Matriz de Confusão dos 80 Casos Padronizados (`2001..2080`)
+## 4. Matrizes de Confusão Reais (`Google Gemini` vs. Gabarito)
 
-| Gabarito \\ Predição | Hardware | Software | Redes | Acessos | Total Gabarito |
+### 4.1 Subconjunto Padronizado (`2001..2080`, `N = 80`) — {len(acertos_pad_cat)}/80 ({len(acertos_pad_cat)/80*100:.1f}%)
+
+| Gabarito \\ Predição Gemini | Hardware | Software | Redes | Acessos | Total Gabarito |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-{linhas_matriz}
+{linhas_m_pad}
 
-### Detalhamento das 6 Divergências Semânticas (80 - 74 = 6)
+### 4.2 Amostra Completa (`2001..2100`, `N = 100`) — {len(acertos_tot_cat)}/100 ({len(acertos_tot_cat):.1f}%)
 
-| Ticket ID | Relato | Gabarito | Sugerida | Confiança | Roteamento |
-| :---: | :--- | :---: | :---: | :---: | :---: |
+| Gabarito \\ Predição Gemini | Hardware | Software | Redes | Acessos | Total Gabarito |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+{linhas_m_tot}
+
+### 4.3 Divergências Observadas no Subconjunto Ambíguo/Crítico (`N = 100`)
+
+| Ticket ID | Execução n8n | Conteúdo | Gabarito (Cat / Int / Rot) | Gemini Real (Cat / Int / Rot) | Confiança |
+| :---: | :---: | :--- | :---: | :---: | :---: |
 {linhas_div}
 
+> **Análise das divergências:** Nos casos `2083` e `2090`, apesar da diferença pontual de intenção (`2083`) ou categoria (`2090`) em relatos propositalmente vagos, o modelo atribuiu confiança baixa (`0,65` e `0,50`) e sinalizou `requer_revisao_humana = true`, garantindo o desvio seguro para **Revisão Humana**. No chamado `2089` (*"Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro"*), o modelo acertou a categoria (`Software`) e a intenção (`Incidente`), mas atribuiu `confianca = 0,90` com `requer_revisao_humana = false`, encaminhando automaticamente apesar da expectativa conservadora do gabarito.
+
 ---
 
-## 5. Validação dos Testes de Valor-Limite e Caso Crítico (`httpbin.org/post`)
+## 5. Casos de Referência, Limite e Críticos Reais no n8n + Supabase
 
-| Ticket ID | Cenário de Teste | Confiança | `requer_revisao_humana` | Decisão Gateway | Resposta HTTP Emulada |
+| Ticket ID | `n8n_exec_id` | Categoria Gemini | Confiança | `requer_revisao_humana` | Status Supabase | Tempo Medido | UUID Supabase |
+| :---: | :---: | :---: | :---: | :---: | :--- | :---: | :--- |
+{linhas_reais_lim}
+
+---
+
+## 6. Testes Controlados de Valor-Limite HTTP via Python (`scripts/validar_poc.py` -> `httpbin.org/post`)
+*Nota: Requisições `HTTP POST` executadas diretamente pelo script Python sobre os exatos escores de fronteira (`0.84`, `0.85`, `0.86`, `0.92`) para testar a precisão matemática do gateway (`executado_no_n8n = false`, `inferencia_gemini_real = false`), em complemento às execuções reais do n8n listadas na Seção 5.*
+
+| Ticket ID | Cenário de Teste | Confiança | `requer_revisao_humana` | Decisão Gateway | Resposta HTTP Emulada (Python) |
 | :---: | :--- | :---: | :---: | :---: | :---: |
 {linhas_limite}
 """
     (EVIDENCIAS_DIR / "resumo_indicadores.md").write_text(resumo_md, encoding="utf-8")
 
-
-def verify_sql_parity(records: list[dict[str, Any]]) -> None:
-    """Valida em SQLite que a query de database/schema.sql gera exatamente os 100 registros."""
-    sql = SCHEMA_PATH.read_text(encoding="utf-8")
-    m = re.search(
-        r"INSERT INTO chamados_triagem\s*\((.*?)\)\s*(SELECT.*?FROM generate_series\(1,\s*100\)\s*AS s\(i\));",
-        sql,
-        re.S,
-    )
-    assert m, "Bloco INSERT ... SELECT não encontrado em database/schema.sql"
-    cols_sql, select_sql = m.group(1), m.group(2)
-
-    def pg_array_to_sqlite(match: re.Match[str]) -> str:
-        vals = re.findall(r"'([^']*)'", match.group(1))
-        idx_expr = match.group(2)
-        whens = " ".join(
-            f"WHEN ({idx_expr}) = {k + 1} THEN '{v}'" for k, v in enumerate(vals)
-        )
-        return f"(CASE {whens} END)"
-
-    s_sqlite = re.sub(
-        r"\(ARRAY\[(.*?)\]\)\[(.*?)\]", pg_array_to_sqlite, select_sql, flags=re.S
-    )
-    s_sqlite = s_sqlite.replace("::int", "").replace("::numeric", "")
-    s_sqlite = re.sub(
-        r"TIMESTAMP WITH TIME ZONE\s+'([^']+)'\s*\+\s*\(i \* INTERVAL '2 seconds'\)",
-        r"datetime('2026-11-08 14:10:00', '+' || (i*2) || ' seconds')",
-        s_sqlite,
-    )
-    s_sqlite = re.sub(r"FROM generate_series\(1,\s*100\)\s*AS s\(i\)", "FROM seq", s_sqlite)
-    s_sqlite = (
-        "WITH RECURSIVE seq(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM seq WHERE i < 100) "
-        + s_sqlite
-    )
-
-    conn = sqlite3.connect(":memory:")
-    conn.execute(
-        """
-        CREATE TABLE chamados_triagem (
-            id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-            created_at TEXT NOT NULL,
-            glpi_ticket_id INTEGER,
-            remetente_email TEXT NOT NULL,
-            conteudo_original TEXT NOT NULL,
-            intencao_classificada TEXT NOT NULL,
-            nivel_urgencia TEXT NOT NULL,
-            categoria_sugerida TEXT,
-            confianca_ia REAL NOT NULL,
-            status_processamento TEXT NOT NULL,
-            resposta_sugerida TEXT,
-            requer_revisao_humana INTEGER DEFAULT 0,
-            tempo_processamento_ms INTEGER
-        );
-        """
-    )
-    conn.execute(f"INSERT INTO chamados_triagem ({cols_sql}) {s_sqlite}")
-    rows = conn.execute(
-        "SELECT glpi_ticket_id, remetente_email, conteudo_original, intencao_classificada, "
-        "nivel_urgencia, categoria_sugerida, confianca_ia, status_processamento, "
-        "requer_revisao_humana, tempo_processamento_ms "
-        "FROM chamados_triagem ORDER BY glpi_ticket_id"
-    ).fetchall()
-    conn.close()
-
-    assert len(rows) == 100
-    for row, rec in zip(rows, records):
-        assert row[0] == rec["glpi_ticket_id"]
-        assert row[1] == rec["remetente_email"]
-        assert row[2] == rec["conteudo_original"]
-        assert row[3] == rec["intencao_classificada"]
-        assert row[4] == rec["nivel_urgencia"]
-        assert row[5] == rec["categoria_sugerida"]
-        assert abs(row[6] - rec["confianca_ia"]) < 1e-6
-        assert row[7] == rec["status_processamento"]
-        assert bool(row[8]) == rec["requer_revisao_humana"]
-        assert row[9] == rec["tempo_processamento_ms_snapshot"]
+    return {
+        "total": len(results),
+        "pad_cat_acc": len(acertos_pad_cat),
+        "pad_int_acc": len(acertos_pad_int),
+        "tot_cat_acc": len(acertos_tot_cat),
+        "tot_int_acc": len(acertos_tot_int),
+        "rout_acc": len(acertos_rout),
+        "auto": len(automaticos),
+        "rev": len(revisao),
+        "rev_low": len(rev_low_conf),
+        "rev_crit": len(rev_crit_high),
+        "mean_e2e_ms": mean_e2e,
+        "median_e2e_ms": median_e2e,
+        "mean_gem_ms": mean_gem,
+        "total_tokens": total_tokens,
+    }
 
 
 def main() -> None:
-    tech_config = verify_workflow_and_sql()
-    records = build_records()
-    verify_sql_parity(records)
-    boundary_results = run_httpbin_boundary_tests(records)
-    export_artifacts(records, tech_config, boundary_results)
+    tech_config = verify_workflow_and_secrets()
+    _, tickets_by_id = load_and_verify_dataset()
+    logs_doc, execucoes, results = load_and_verify_n8n_and_supabase(tickets_by_id)
+    verify_sql_parity(results)
+    results_by_id = {int(r["glpi_ticket_id"]): r for r in results}
+    boundary_results = run_httpbin_boundary_tests(tickets_by_id, results_by_id)
+    stats = generate_summary_markdown(tech_config, logs_doc, execucoes, results, boundary_results)
 
     print("Validação concluída com sucesso!")
-    print("Paridade SQL (database/schema.sql vs 100 registros): 100% confirmada")
-    print(f"Total de chamados: {len(records)}")
-    padronizados = [r for r in records if r["tipo_cenario"] == "Padronizado"]
-    acertos = sum(1 for r in padronizados if r["acerto_categorial"] == "Sim")
-    auto = sum(1 for r in records if r["status_processamento"] == "Automatico")
-    rev = sum(1 for r in records if r["status_processamento"] == "Revisao Humana")
-    print(f"Padronizados: {len(padronizados)} | Acertos: {acertos} ({acertos/len(padronizados)*100:.1f}%)")
-    print(f"Encaminhamentos -> Automatico: {auto} | Revisao Humana: {rev}")
+    print("Paridade completa verificada: data/ == logs_execucao_n8n_100.json == resultados_execucao_100 == database/schema.sql (SQLite)")
+    print(f"Total de chamados executados no n8n + Gemini + Supabase: {stats['total']}")
+    print(
+        f"Padronizados (2001..2080): {stats['pad_cat_acc']}/80 acertos categoriais "
+        f"({stats['pad_cat_acc']/80*100:.1f}%) | {stats['pad_int_acc']}/80 intenção"
+    )
+    print(
+        f"Global (2001..2100): {stats['tot_cat_acc']}/100 categoria ({stats['tot_cat_acc']}%) | "
+        f"{stats['rout_acc']}/100 concordância de roteamento"
+    )
+    print(
+        f"Encaminhamentos -> Automatico: {stats['auto']} | Revisao Humana: {stats['rev']} "
+        f"({stats['rev_low']} confiança < 0.85 + {stats['rev_crit']} críticos >= 0.85)"
+    )
+    print(
+        f"Tempo médio e2e medido: {stats['mean_e2e_ms']:.1f} ms (mediana {stats['median_e2e_ms']:.1f} ms) | "
+        f"Nó Gemini: {stats['mean_gem_ms']:.1f} ms | Tokens totais: {stats['total_tokens']:,}"
+    )
     for b in boundary_results:
         print(
-            f"Limite ID {b['glpi_ticket_id']} | conf={b['llm_output_simulado']['confianca']} | "
+            f"Teste BVA Python ID {b['glpi_ticket_id']} | conf={b['llm_output_simulado']['confianca']:.2f} | "
             f"rev={b['llm_output_simulado']['requer_revisao_humana']} -> "
             f"{b['avaliacao_no_if']['status_processamento']} | "
             f"httpbin status={b['emulacao_httpbin']['http_status']} ({b['emulacao_httpbin']['latencia_http_ms']} ms)"

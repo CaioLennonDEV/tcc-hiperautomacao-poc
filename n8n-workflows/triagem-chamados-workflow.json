@@ -1,10 +1,12 @@
 {
+  "id": "tccPoCTriagemGLPI",
   "name": "PoC - Triagem Inteligente GLPI (Hiperautomacao)",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "glpi-ticket-webhook",
+        "responseMode": "lastNode",
         "options": {}
       },
       "id": "0f4f174a-4cc9-47ca-9cc3-27fc11d7aa0e",
@@ -19,15 +21,18 @@
     },
     {
       "parameters": {
+        "agent": "toolsAgent",
+        "promptType": "define",
         "text": "=Chamado Recebido do GLPI:\nTítulo: {{$json.body.ticket_title}}\nDescrição: {{$json.body.ticket_description}}\nSolicitante: {{$json.body.user_email}}",
+        "hasOutputParser": true,
         "options": {
-          "systemMessage": "Você é um classificador determinístico para triagem de chamados do GLPI integrado à esteira de hiperautomação. Responda ESTRITAMENTE em formato JSON com as chaves: intencao, urgencia, categoria_glpi, confianca (0.0 a 1.0), resumo_demanda, resposta_sugerida e requer_revisao_humana (booleano, true se confianca < 0.85 ou alta ambiguidade/risco crítico)."
+          "systemMessage": "Você é um classificador determinístico para triagem inicial de chamados do GLPI integrado à esteira de hiperautomação. Analise apenas os dados informados no chamado, sem inventar dados técnicos ausentes.\n\nRetorne ESTRITAMENTE em formato JSON (via Structured Output Parser) com as chaves:\n- intencao: \"Incidente\" (falha, erro, travamento, queda, mau funcionamento), \"Solicitacao\" (pedido de acesso, criação de usuário, instalação, atualização, liberação), \"Duvida\" (pedido de esclarecimento sem erro objetivo claro) ou \"Outros\" (relato excessivamente genérico sem causa identificável).\n- urgencia: \"Baixa\", \"Media\", \"Alta\" ou \"Critica\".\n- categoria_glpi: estritamente \"Acessos\", \"Hardware\", \"Redes\" ou \"Software\".\n- confianca: número decimal de 0.0 a 1.0 refletindo a clareza e previsibilidade da classificação.\n- resumo_demanda: síntese objetiva em 1 linha.\n- resposta_sugerida: mensagem cordial de primeiro contato informando apenas a triagem e o encaminhamento (NUNCA afirme que conta já foi desbloqueada, e-mail já foi enviado, firewall já foi liberado ou instalação já foi concluída).\n- requer_revisao_humana: booleano obrigatório. Marque true sempre que confianca < 0.85, houver ambiguidade entre componentes/causas (ex.: relato vago sem código de erro conclusivo ou sem definição entre hardware/sistema/rede), ou risco crítico de segurança/infraestrutura (ex.: permissão de administrador/root/Domain Admins, acesso ao cofre de senhas, usuário genérico sem rastreio, liberação de firewall/DMZ, superaquecimento, cheiro de componente aquecido, falha em nobreak de rack ou erro em integração fiscal/faturamento). Para chamados padronizados e claros de suporte operacional (ex.: senha bloqueada no AD, perfil de leitura no ERP, monitor sem ligar com cabo testado, atolamento de papel em impressora, instalação de Office/Chrome, VPN/Wi-Fi pontual), atribua confianca >= 0.85 e requer_revisao_humana: false."
         }
       },
       "id": "069a5c14-0521-4f4a-b72c-a4c9b2271a33",
       "name": "Agente Cognitivo LLM (Parsing)",
       "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1,
+      "typeVersion": 1.7,
       "position": [
         -288,
         -64
@@ -38,13 +43,13 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ $json.output.output.requer_revisao_humana }}",
+              "value1": "={{ ($json.output?.output ?? $json.output).requer_revisao_humana }}",
               "value2": false
             }
           ],
           "number": [
             {
-              "value1": "={{ $json.output.output.confianca }}",
+              "value1": "={{ ($json.output?.output ?? $json.output).confianca }}",
               "operation": "largerEqual",
               "value2": 0.85
             }
@@ -79,35 +84,35 @@
             },
             {
               "fieldId": "intencao_classificada",
-              "fieldValue": "={{ $('Agente Cognitivo LLM (Parsing)').item.json.output.output.intencao }}"
+              "fieldValue": "={{ ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).intencao }}"
             },
             {
               "fieldId": "nivel_urgencia",
-              "fieldValue": "={{ $('Agente Cognitivo LLM (Parsing)').item.json.output.output.urgencia }}"
+              "fieldValue": "={{ ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).urgencia }}"
             },
             {
               "fieldId": "categoria_sugerida",
-              "fieldValue": "={{ $('Agente Cognitivo LLM (Parsing)').item.json.output.output.categoria_glpi }}"
+              "fieldValue": "={{ ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).categoria_glpi }}"
             },
             {
               "fieldId": "confianca_ia",
-              "fieldValue": "={{ $('Agente Cognitivo LLM (Parsing)').item.json.output.output.confianca }}"
+              "fieldValue": "={{ ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).confianca }}"
             },
             {
               "fieldId": "status_processamento",
-              "fieldValue": "={{ ($('Agente Cognitivo LLM (Parsing)').item.json.output.output.requer_revisao_humana || $('Agente Cognitivo LLM (Parsing)').item.json.output.output.confianca < 0.85) ? 'Revisao Humana' : 'Automatico' }}"
+              "fieldValue": "={{ (($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).requer_revisao_humana || ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).confianca < 0.85) ? 'Revisao Humana' : 'Automatico' }}"
             },
             {
               "fieldId": "resposta_sugerida",
-              "fieldValue": "={{ $('Agente Cognitivo LLM (Parsing)').item.json.output.output.resposta_sugerida }}"
+              "fieldValue": "={{ ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).resposta_sugerida }}"
             },
             {
               "fieldId": "requer_revisao_humana",
-              "fieldValue": "={{ Boolean($('Agente Cognitivo LLM (Parsing)').item.json.output.output.requer_revisao_humana || $('Agente Cognitivo LLM (Parsing)').item.json.output.output.confianca < 0.85) }}"
+              "fieldValue": "={{ Boolean(($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).requer_revisao_humana || ($('Agente Cognitivo LLM (Parsing)').item.json.output?.output ?? $('Agente Cognitivo LLM (Parsing)').item.json.output).confianca < 0.85) }}"
             },
             {
               "fieldId": "tempo_processamento_ms",
-              "fieldValue": "={{ $json.tempo_processamento_ms || 1900 }}"
+              "fieldValue": "={{ $('Webhook GLPI (Novo Chamado)').item.json.body.timestamp_inicio_ms ? Math.max(1, Date.now() - Number($('Webhook GLPI (Novo Chamado)').item.json.body.timestamp_inicio_ms)) : ($json.tempo_processamento_ms ?? null) }}"
             }
           ]
         }
@@ -155,7 +160,7 @@
         "url": "https://httpbin.org/post",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id }}\",\n  \"status\": \"Triado Automaticamente\",\n  \"categoria\": \"{{ $json.output.output.categoria_glpi }}\",\n  \"confianca\": {{ $json.output.output.confianca }}\n}",
+        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id }}\",\n  \"status\": \"Triado Automaticamente\",\n  \"categoria\": \"{{ ($json.output?.output ?? $json.output).categoria_glpi }}\",\n  \"confianca\": {{ ($json.output?.output ?? $json.output).confianca }}\n}",
         "options": {}
       },
       "id": "0398a053-45d7-46db-8ee0-15f38413f897",
@@ -173,7 +178,7 @@
         "url": "https://httpbin.org/post",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id }}\",\n  \"status\": \"Aguardando Revisao Humana\",\n  \"alerta\": \"{{ $json.output.output.confianca < 0.85 ? 'Score de confianca inferior ao limiar de 0.85' : 'Revisao humana obrigatoria por alta criticidade ou ambiguidade' }}\"\n}",
+        "jsonBody": "={\n  \"ticket_id\": \"{{ $('Webhook GLPI (Novo Chamado)').item.json.body.ticket_id }}\",\n  \"status\": \"Aguardando Revisao Humana\",\n  \"alerta\": \"{{ ($json.output?.output ?? $json.output).confianca < 0.85 ? 'Score de confianca inferior ao limiar de 0.85' : 'Revisao humana obrigatoria por alta criticidade ou ambiguidade' }}\"\n}",
         "options": {}
       },
       "id": "7e10b002-ddf3-40f1-b173-9d9c48692b63",
@@ -187,7 +192,8 @@
     },
     {
       "parameters": {
-        "jsonSchemaExample": "{\n  \"intencao\": \"\", \n  \"urgencia\": \"\", \n  \"categoria_glpi\": \"\", \n  \"confianca\": 0.0, \n  \"resumo_demanda\": \"\", \n  \"resposta_sugerida\": \"\", \n  \"requer_revisao_humana\": true\n}"
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"intencao\": \"Solicitacao\",\n  \"urgencia\": \"Alta\",\n  \"categoria_glpi\": \"Acessos\",\n  \"confianca\": 0.95,\n  \"resumo_demanda\": \"Síntese concisa da solicitação do chamado\",\n  \"resposta_sugerida\": \"Mensagem objetiva informando a classificação e o encaminhamento do chamado\",\n  \"requer_revisao_humana\": false\n}"
       },
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
@@ -286,6 +292,12 @@
     }
   },
   "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  },
   "meta": {
     "templateCredsSetupCompleted": true
   }

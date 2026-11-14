@@ -1,17 +1,24 @@
 -- ============================================================================
--- Schema SQL: Prova de Conceito de Hiperautomação (GLPI / TCC)
--- Tabela de Auditoria e Persistência de Triagem
+-- Schema SQL: Prova de Conceito de Hiperautomacao (GLPI / TCC)
+-- Tabela de Auditoria e Persistencia de Triagem
 -- Banco: Supabase / PostgreSQL
 -- ============================================================================
--- OBSERVAÇÃO METODOLÓGICA:
--- 1. A seção DDL cria a tabela `chamados_triagem` e os índices B-Tree usados
---    pelo fluxo n8n.
--- 2. A seção DML abaixo representa o snapshot sintético determinístico da
---    bateria experimental (N = 100 chamados sintéticos), permitindo reproduzir
---    exatamente os indicadores descritos no artigo (74 acertos em 80 casos
---    padronizados = 92,5%; 82 encaminhamentos automáticos; 18 revisões humanas)
---    e os casos de Análise de Valor-Limite (0.84, 0.85, 0.86 e caso crítico 0.92).
--- 3. Não deve ser confundido com inferências em tempo real em ambiente produtivo.
+-- OBSERVACAO METODOLOGICA:
+-- 1. A secao DDL cria a tabela `chamados_triagem` e os indices B-Tree usados
+--    pelo fluxo n8n (`n8n-workflows/triagem-chamados-workflow.json`).
+-- 2. A secao DML abaixo reproduz fielmente os 100 registros reais gravados
+--    no Supabase pela execucao ao vivo do fluxo no n8n v2.47.7 com o modelo
+--    Google Gemini (`models/gemini-3.5-flash-lite`, temperature = 0.0),
+--    Structured Output Parser e saida HTTP emulada via https://httpbin.org/post.
+-- 3. Origem dos textos de entrada: chamados sinteticos anonimizados (`N = 100`,
+--    sendo 80 padronizados e 20 ambiguos/criticos), processados individualmente
+--    pela IA com log completo preservado em `evidencias/logs_execucao_n8n_100.json`.
+-- 4. Indicadores reais apurados nesta carga:
+--    - Acuracia categorial e de intencao nos 80 padronizados: 80/80 (100,0%)
+--    - Acuracia categorial global nos 100 chamados: 99/100 (99,0%)
+--    - Encaminhamento automatico: 83/100 (83,0%)
+--    - Revisao humana (Human-in-the-Loop): 17/100 (17,0%)
+--    - Tempo medio efetivo medido (webhook ate persistencia Supabase): 1.519,4 ms
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
@@ -25,31 +32,28 @@ CREATE TABLE IF NOT EXISTS chamados_triagem (
     intencao_classificada TEXT NOT NULL,   -- 'Duvida', 'Incidente', 'Solicitacao', 'Outros'
     nivel_urgencia TEXT NOT NULL,          -- 'Baixa', 'Media', 'Alta', 'Critica'
     categoria_sugerida TEXT,               -- 'Hardware', 'Software', 'Redes', 'Acessos'
-    confianca_ia NUMERIC(3,2) NOT NULL,    -- Escore de confiança estimado (0.00 a 1.00)
+    confianca_ia NUMERIC(3,2) NOT NULL,    -- Escore de confianca estimado (0.00 a 1.00)
     status_processamento TEXT NOT NULL,    -- 'Automatico' ou 'Revisao Humana'
     resposta_sugerida TEXT,
     requer_revisao_humana BOOLEAN DEFAULT FALSE,
     tempo_processamento_ms INTEGER
 );
 
--- Índices B-Tree para otimização de consultas e auditoria do CoE
+-- Indices B-Tree para otimizacao de consultas e auditoria do CoE
 CREATE INDEX IF NOT EXISTS idx_chamados_triagem_status ON chamados_triagem(status_processamento);
 CREATE INDEX IF NOT EXISTS idx_chamados_triagem_intencao ON chamados_triagem(intencao_classificada);
 CREATE INDEX IF NOT EXISTS idx_chamados_triagem_created_at ON chamados_triagem(created_at DESC);
 
 -- ============================================================================
--- Snapshot dos Logs da Bateria Experimental (N = 100 Chamados Sintéticos)
--- Entrada: 25 Hardware, 25 Software, 25 Redes, 25 Acessos
--- Cenários: 80 Padronizados (IDs 2001..2080) | 20 Ambíguos/Críticos (IDs 2081..2100)
--- Roteamento: 82 Automáticos (IDs 2001..2082) | 18 Revisão Humana (IDs 2083..2100)
--- Acurácia nos Padronizados: 92,5% (74 acertos exatos e 6 divergências: 2015, 2028, 2042, 2055, 2068, 2079)
--- Análise de Valor-Limite (nó IF): 0.86 (ID 2080), 0.85 (ID 2081), 0.84 (ID 2084),
---   e caso crítico com confiança alta (0.92) + requer_revisao_humana = TRUE (ID 2085)
+-- Snapshot Reproduzivel dos 100 Registros Persistidos no Supabase pelo n8n
+-- Execucao: workflow tccPoCTriagemGLPI + models/gemini-3.5-flash-lite + httpbin.org
+-- Preserva os UUIDs reais, timestamps UTC, respostas sugeridas e tempos em ms.
 -- ============================================================================
 
 TRUNCATE TABLE chamados_triagem;
 
 INSERT INTO chamados_triagem (
+    id,
     created_at,
     glpi_ticket_id,
     remetente_email,
@@ -62,180 +66,115 @@ INSERT INTO chamados_triagem (
     resposta_sugerida,
     requer_revisao_humana,
     tempo_processamento_ms
-)
-SELECT
-    -- Timestamps sequenciais determinísticos do snapshot experimental
-    TIMESTAMP WITH TIME ZONE '2026-11-08 14:10:00+00' + (i * INTERVAL '2 seconds') AS created_at,
-    2000 + i AS glpi_ticket_id,
-    CASE
-        WHEN i = 1 THEN 'carlos.souza@empresa.com'
-        WHEN i = 2 THEN 'mariana.costa@empresa.com'
-        WHEN i = 3 THEN 'joao.pereira@empresa.com'
-        WHEN i = 4 THEN 'fernanda.lima@empresa.com'
-        WHEN i = 5 THEN 'ricardo.alves@empresa.com'
-        WHEN i = 6 THEN 'juliana.rocha@empresa.com'
-        WHEN i = 80 THEN 'patricia.gomes@empresa.com'
-        WHEN i = 81 THEN 'lucas.martins@empresa.com'
-        WHEN i = 82 THEN 'fernanda.lima@empresa.com'
-        WHEN i = 83 THEN 'mariana.costa@empresa.com'
-        WHEN i = 84 THEN 'joao.pereira@empresa.com'
-        WHEN i = 85 THEN 'carlos.souza@empresa.com'
-        WHEN i = 86 THEN 'ricardo.alves@empresa.com'
-        WHEN i = 90 THEN 'ana.silva@empresa.com'
-        ELSE (ARRAY[
-            'ana.silva@empresa.com', 'carlos.souza@empresa.com', 'mariana.costa@empresa.com',
-            'joao.pereira@empresa.com', 'fernanda.lima@empresa.com', 'ricardo.alves@empresa.com',
-            'juliana.rocha@empresa.com', 'lucas.martins@empresa.com', 'patricia.gomes@empresa.com'
-        ])[1 + (i % 9)]
-    END AS remetente_email,
-
-    -- Relato original alinhado ao dataset sintético (25 Hardware, 25 Software, 25 Redes, 25 Acessos)
-    CASE
-        WHEN i = 1 THEN 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.'
-        WHEN i = 2 THEN 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.'
-        WHEN i = 3 THEN 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.'
-        WHEN i = 4 THEN 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.'
-        WHEN i = 5 THEN 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.'
-        WHEN i = 6 THEN 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.'
-        WHEN i = 7 THEN 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.'
-        WHEN i = 8 THEN 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.'
-        -- Casos padronizados com divergência semântica documentada (6 casos em 80 -> 92,5% de acurácia)
-        WHEN i IN (15, 55, 79) THEN 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.'
-        WHEN i IN (28, 68) THEN 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.'
-        WHEN i = 42 THEN 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.'
-        -- Demais cenários padronizados (i = 9..80): 20 Hardware, 20 Software, 20 Redes, 20 Acessos no total
-        WHEN i <= 80 THEN
-            CASE (i % 4)
-                WHEN 0 THEN (ARRAY[
-                    'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.',
-                    'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.'
-                ])[1 + ((i / 4)::int % 2)]
-                WHEN 1 THEN (ARRAY[
-                    'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.',
-                    'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.'
-                ])[1 + ((i / 4)::int % 2)]
-                WHEN 2 THEN (ARRAY[
-                    'VPN desconectando - Erro de autenticação SSL ao conectar de home office.',
-                    'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.'
-                ])[1 + ((i / 4)::int % 2)]
-                ELSE (ARRAY[
-                    'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.',
-                    'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.'
-                ])[1 + ((i / 4)::int % 2)]
-            END
-        -- Cenários de fronteira e ambíguos/críticos (i = 81..100): 5 Hardware, 5 Software, 5 Redes, 5 Acessos
-        WHEN i = 81 THEN 'Oscilação intermitente no link secundário - Queda rápida de pacotes na filial durante backup noturno, já voltou ao normal mas requer verificação da rota.'
-        WHEN i = 82 THEN 'Lentidão pontual no acesso ao portal interno - Sistema web responde com atraso no setor comercial após troca de switch, requer verificação de rota.'
-        WHEN i = 83 THEN 'Problema no sistema - Dá erro quando tento salvar, mas às vezes vai. Verificar.'
-        WHEN i = 84 THEN 'Estação desligando sozinha - O gabinete apita e desliga do nada, não sei se é fonte ou placa.'
-        WHEN i = 85 THEN 'Liberar acesso total - Preciso de permissão de administrador geral no servidor de produção.'
-        WHEN i = 86 THEN 'Erro 0x80040115 - Apareceu essa janela na tela e fechou tudo que eu estava fazendo.'
-        WHEN i = 87 THEN 'Solicitação de acesso irrestrito - Usuário pede permissão de administrador local e acesso ao cofre de senhas.'
-        WHEN i = 88 THEN 'Ruído anormal no desktop - Máquina reiniciando aleatoriamente com cheiro de componente aquecido.'
-        WHEN i = 89 THEN 'Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro.'
-        WHEN i = 90 THEN 'Não funciona nada aqui - O sistema parou depois que mexeram ontem, não sei se é rede ou PC.'
-        WHEN i = 91 THEN 'Permissão temporária de root - Solicito acesso administrativo irrestrito ao banco de dados para auditoria externa.'
-        WHEN i = 92 THEN 'Ruído intermitente no nobreak - Equipamento do rack apresenta bipes ocasionais sem queda de energia aparente.'
-        WHEN i = 93 THEN 'Falha intermitente na integração fiscal - Notas ficam presas na fila sem mensagem conclusiva de erro.'
-        WHEN i = 94 THEN 'Acesso externo urgente - Preciso liberar portas no firewall para um fornecedor hoje.'
-        WHEN i = 95 THEN 'Compartilhamento de credencial setorial - Solicito criação de usuário genérico sem rastreio individual para equipe terceirizada.'
-        WHEN i = 96 THEN 'Superaquecimento em estação de engenharia - Computador reinicia durante renderização pesada, suspeita de cooler.'
-        WHEN i = 97 THEN 'Conflito após atualização do ERP - Módulo de faturamento exibe tela branca para parte dos usuários.'
-        WHEN i = 98 THEN 'Abertura emergencial de firewall - Solicito liberação imediata de faixa de IPs externos na DMZ.'
-        WHEN i = 99 THEN 'Elevação de privilégio no Active Directory - Usuário solicita inclusão imediata no grupo Domain Admins.'
-        ELSE 'Lentidão severa entre matriz e filial - Túnel IPsec apresenta perda intermitente de pacotes em horários aleatórios.'
-    END AS conteudo_original,
-
-    -- Intenção classificada
-    CASE
-        WHEN i IN (1, 2, 5, 7) THEN 'Solicitacao'
-        WHEN i IN (3, 4, 6, 8) THEN 'Incidente'
-        WHEN i <= 80 THEN
-            CASE (i % 4)
-                WHEN 0 THEN 'Incidente'
-                WHEN 1 THEN 'Solicitacao'
-                WHEN 2 THEN 'Incidente'
-                ELSE 'Solicitacao'
-            END
-        WHEN i IN (81, 82, 84, 86, 88, 89, 92, 93, 96, 97, 100) THEN 'Incidente'
-        WHEN i = 83 THEN 'Duvida'
-        WHEN i = 90 THEN 'Outros'
-        ELSE 'Solicitacao'
-    END AS intencao_classificada,
-
-    -- Urgência estimada
-    CASE
-        WHEN i = 1 THEN 'Alta'
-        WHEN i IN (2, 5, 7) THEN 'Baixa'
-        WHEN i IN (3, 6) THEN 'Media'
-        WHEN i IN (4, 8) THEN 'Alta'
-        WHEN i IN (15, 55, 79) THEN 'Baixa'
-        WHEN i <= 80 THEN
-            CASE
-                WHEN (i % 4) = 3 AND ((i / 4)::int % 2) = 0 THEN 'Alta'
-                ELSE (ARRAY['Media', 'Baixa', 'Alta', 'Baixa'])[1 + (i % 4)]
-            END
-        WHEN i = 81 THEN 'Alta'
-        WHEN i IN (82, 83, 84, 86, 89, 92, 93) THEN 'Media'
-        WHEN i IN (88, 90, 96, 97, 100) THEN 'Alta'
-        ELSE 'Critica'
-    END AS nivel_urgencia,
-
-    -- Categoria sugerida: nos 80 padronizados, 74 acertos exatos (92,5%) e 6 divergências semânticas (IDs 2015, 2028, 2042, 2055, 2068, 2079)
-    CASE
-        WHEN i IN (1, 2) THEN 'Acessos'
-        WHEN i IN (3, 6) THEN 'Hardware'
-        WHEN i IN (4, 8) THEN 'Redes'
-        WHEN i IN (5, 7) THEN 'Software'
-        WHEN i IN (15, 55, 79) THEN 'Software' -- Chamados de acesso ao ERP classificados como Software
-        WHEN i IN (28, 68) THEN 'Redes'        -- Chamados de impressora de rede classificados como Redes
-        WHEN i = 42 THEN 'Acessos'             -- Chamado de autenticação SSL/VPN classificado como Acessos
-        WHEN i <= 80 THEN (ARRAY['Hardware', 'Software', 'Redes', 'Acessos'])[1 + (i % 4)]
-        WHEN i IN (81, 82, 94, 98, 100) THEN 'Redes'
-        WHEN i IN (83, 86, 90) THEN 'Acessos'  -- Classificações com baixa confiança em relatos ambíguos
-        WHEN i IN (84, 88, 92, 96) THEN 'Hardware'
-        WHEN i IN (85, 87, 91, 95, 99) THEN 'Acessos'
-        ELSE 'Software'
-    END AS categoria_sugerida,
-
-    -- Confiança IA com Análise de Valor-Limite (0.86 acima, 0.85 no limiar, 0.84 abaixo, 0.92 crítico com revisão obrigatória)
-    CASE
-        WHEN i = 1 THEN 0.95
-        WHEN i = 80 THEN 0.86
-        WHEN i IN (81, 82) THEN 0.85
-        WHEN i = 83 THEN 0.73
-        WHEN i = 84 THEN 0.84
-        WHEN i = 85 THEN 0.92 -- Caso crítico com confiança alta (>= 0.85) e revisão humana obrigatória
-        WHEN i = 86 THEN 0.76
-        WHEN i = 90 THEN 0.80
-        WHEN i <= 80 THEN ROUND((0.86 + ((i % 13) * 0.01))::numeric, 2)
-        ELSE ROUND((0.55 + ((i % 28) * 0.01))::numeric, 2)
-    END AS confianca_ia,
-
-    CASE
-        WHEN i <= 82 THEN 'Automatico'
-        ELSE 'Revisao Humana'
-    END AS status_processamento,
-
-    CASE
-        WHEN i = 1 THEN 'Olá! Identificamos o bloqueio da sua conta no Active Directory. Seu acesso foi desbloqueado e um link seguro para redefinição de senha foi enviado para o seu e-mail corporativo. Por favor, siga as instruções para cadastrar a nova senha.'
-        WHEN i <= 82 THEN 'Prezado(a), sua solicitação foi triada automaticamente e encaminhada para atendimento conforme procedimento padrão.'
-        WHEN i = 85 THEN 'Solicitação crítica de privilégio administrativo encaminhada obrigatoriamente para revisão e aprovação humana (Human-in-the-Loop), apesar da alta confiança na categorização.'
-        ELSE 'Chamado encaminhado para revisão técnica (Human-in-the-Loop) devido a escore de confiança inferior a 0.85 ou alta criticidade.'
-    END AS resposta_sugerida,
-
-    (i > 82) AS requer_revisao_humana,
-
-    -- Valores sintéticos de referência no snapshot (não representam medição de SLA em produção)
-    1400 + ((i * 37) % 1000) AS tempo_processamento_ms
-FROM generate_series(1, 100) AS s(i);
+) VALUES
+    ('062d339e-9387-41e2-abf7-6c23fb9d6594', '2026-11-14T19:56:28.638911+00:00', 2001, 'carlos.souza@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 1.00, 'Automatico', 'Olá Carlos, sua solicitação de desbloqueio e redefinição de senha de rede foi registrada com sucesso e encaminhada para a equipe de Acessos.', FALSE, 1627),
+    ('022dcda5-180d-459b-960e-407dbb1ae228', '2026-11-14T19:56:31.052981+00:00', 2002, 'mariana.costa@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Mariana. Sua solicitação de perfil de leitura no ERP foi recebida e encaminhada para a equipe de Acessos. Em breve entraremos em contato.', FALSE, 1537),
+    ('2b561184-4a45-40fe-b974-373a3d8ad58c', '2026-11-14T19:56:33.74851+00:00', 2003, 'joao.pereira@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá, João. Recebemos sua solicitação sobre o monitor que não liga. O chamado foi classificado como Incidente de Hardware e encaminhado para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1814),
+    ('859e629e-ea67-416a-a290-b41924b72bce', '2026-11-14T19:56:36.018273+00:00', 2004, 'fernanda.lima@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Fernanda, sua solicitação referente à desconexão da VPN foi registrada como Incidente de Redes e encaminhada para a equipe técnica analisar. Em breve entraremos em contato.', FALSE, 1454),
+    ('967decf9-c979-4894-ba15-f3742364887a', '2026-11-14T19:56:38.235737+00:00', 2005, 'ricardo.alves@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Ricardo, sua solicitação de instalação do pacote Office foi registrada e encaminhada para a equipe de suporte. Entraremos em contato em breve.', FALSE, 1417),
+    ('dc46d147-7103-4bc6-bd62-12bfd1fc3330', '2026-11-14T19:56:40.521835+00:00', 2006, 'juliana.rocha@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.90, 'Automatico', 'Olá Juliana, recebemos o seu chamado referente à impressora do 2º andar com falha de atolamento de papel. Sua solicitação foi direcionada para a equipe de suporte de Hardware e será analisada em breve.', FALSE, 1395),
+    ('886ed893-eec4-4c2d-9f43-3215e3b2fd88', '2026-11-14T19:56:42.769593+00:00', 2007, 'lucas.martins@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Lucas, sua solicitação de atualização do navegador corporativo (Chrome) foi recebida e encaminhada para a equipe de suporte. Em breve entraremos em contato.', FALSE, 1372),
+    ('a5c9455b-8a92-4259-bacf-999dabbf1499', '2026-11-14T19:56:44.953091+00:00', 2008, 'patricia.gomes@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, Patrícia! Recebemos o seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua demanda foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1361),
+    ('a307f398-865a-4d31-a44a-c8bbb14ed8be', '2026-11-14T19:56:47.368353+00:00', 2009, 'ana.silva@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Media', 'Software', 0.95, 'Automatico', 'Olá, Ana! Recebemos sua solicitação para instalação do pacote Office (Excel e Word) na estação 14. Seu chamado foi categorizado e encaminhado para a equipe de suporte de Software. Em breve entraremos em contato.', FALSE, 1517),
+    ('e36c19dc-c7be-4789-87dc-a65c69652946', '2026-11-14T19:56:49.654905+00:00', 2010, 'carlos.souza@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.90, 'Automatico', 'Olá Carlos, sua solicitação referente à VPN desconectando foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe de suporte técnico analisar. Em breve entraremos em contato.', FALSE, 1486),
+    ('3fa61c58-bc15-4019-bccd-49f3767c5335', '2026-11-14T19:56:51.922924+00:00', 2011, 'mariana.costa@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Mariana. Sua solicitação de desbloqueio de senha de rede foi recebida e encaminhada para a equipe de suporte. Em breve você receberá instruções para o redefinição de acesso.', FALSE, 1430),
+    ('a59e5814-5d9e-4866-a6c2-94efff7cd710', '2026-11-14T19:56:54.097813+00:00', 2012, 'joao.pereira@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Baixa', 'Hardware', 0.95, 'Automatico', 'Olá, João. Recebemos sua solicitação referente à impressora do 2º andar. Seu chamado foi classificado como Incidente de Hardware e encaminhado para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1385),
+    ('069ec48f-d4d0-43aa-9bef-88f043754e51', '2026-11-14T19:56:56.414862+00:00', 2013, 'fernanda.lima@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Fernanda, recebemos a sua solicitação para instalação da versão homologada do Chrome. Seu chamado foi classificado como Solicitação e encaminhado para a equipe responsável para tratativa. Em breve retornaremos com atualizações.', FALSE, 1461),
+    ('b4162e02-8de7-453f-b3d1-ee5067f97398', '2026-11-14T19:56:58.679818+00:00', 2014, 'ricardo.alves@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Ricardo, recebemos seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica analisar e normalizar o sinal.', FALSE, 1423),
+    ('ceca5703-124d-4646-abb7-c1a7704f75d3', '2026-11-14T19:57:01.538671+00:00', 2015, 'juliana.rocha@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Juliana, recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro e ela foi encaminhada para a equipe de Acessos. Em breve entraremos em contato.', FALSE, 1989),
+    ('eafa2683-f50b-4741-9693-4eadf3447015', '2026-11-14T19:57:03.932919+00:00', 2016, 'lucas.martins@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Lucas, recebemos sua solicitação referente ao monitor que não liga. O chamado foi classificado como Incidente e encaminhado para a equipe de Hardware. Em breve entraremos em contato.', FALSE, 1577),
+    ('efab10fd-7a41-402e-baeb-9e9d105c06aa', '2026-11-14T19:57:06.160284+00:00', 2017, 'patricia.gomes@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Patrícia, sua solicitação de instalação do pacote Office foi recebida e encaminhada para a equipe de suporte técnico. Em breve entraremos em contato.', FALSE, 1425),
+    ('5ddae204-cb8f-41fa-be08-d2846f650f0d', '2026-11-14T19:57:08.6575+00:00', 2018, 'ana.silva@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, Ana. Recebemos o seu chamado referente à falha de autenticação SSL na VPN. Sua solicitação foi classificada como Incidente na categoria Redes e encaminhada para a equipe de suporte técnico analisar. Em breve entraremos em contato.', FALSE, 1637),
+    ('928da6ad-60ca-4743-8cea-4a1853b47fcf', '2026-11-14T19:57:10.959854+00:00', 2019, 'carlos.souza@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Carlos, recebemos a sua solicitação referente ao desbloqueio de senha de rede (AD). Sua demanda foi classificada e encaminhada para a equipe responsável realizar o atendimento.', FALSE, 1495),
+    ('8d6241c9-aa92-4b93-9246-16a09e64bbfe', '2026-11-14T19:57:13.074129+00:00', 2020, 'mariana.costa@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Baixa', 'Hardware', 0.95, 'Automatico', 'Olá Mariana, recebemos sua solicitação referente à impressora do 2º andar. O chamado foi classificado como Incidente de Hardware e encaminhado para a equipe de suporte técnico realizar o atendimento no local.', FALSE, 1297),
+    ('2b54aef6-1ab6-492c-a08a-0e604c37a95c', '2026-11-14T19:57:15.898049+00:00', 2021, 'joao.pereira@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá, João. Recebemos sua solicitação de atualização do navegador corporativo (Chrome). O chamado foi categorizado e encaminhado para a equipe de suporte de Software para atendimento.', FALSE, 2017),
+    ('f3ac8389-971d-4b9c-801f-497f00b3e7eb', '2026-11-14T19:57:18.13146+00:00', 2022, 'fernanda.lima@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, Fernanda! Identificamos seu chamado sobre a oscilação no Wi-Fi corporativo na sala de reuniões 3. O caso foi categorizado como Incidente de Redes e encaminhado para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1356),
+    ('f56a47b6-25d7-4e7c-ae4c-8167a29ea8e5', '2026-11-14T19:57:20.302805+00:00', 2023, 'ricardo.alves@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Ricardo, recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro. O chamado foi classificado e encaminhado para a equipe responsável para providenciar o perfil de leitura.', FALSE, 1321),
+    ('8bac25b0-8fa7-4683-8d94-d3c657f652c4', '2026-11-14T19:57:22.756041+00:00', 2024, 'juliana.rocha@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Juliana, recebemos o seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Hardware para análise e suporte.', FALSE, 1580),
+    ('b0b8f0e8-c924-47b0-b2f2-3a127bd0965a', '2026-11-14T19:57:25.040205+00:00', 2025, 'lucas.martins@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Lucas, sua solicitação de instalação do pacote Office (Excel e Word) na estação 14 foi registrada e encaminhada para a equipe responsável. Em breve entraremos em contato.', FALSE, 1460),
+    ('47f16efa-aa15-44aa-8854-29c3f37154dd', '2026-11-14T19:57:32.038504+00:00', 2026, 'patricia.gomes@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, Patrícia. Recebemos o seu chamado sobre a desconexão da VPN com erro de autenticação SSL. Sua demanda foi classificada como Incidente e encaminhada à equipe de Redes para análise e suporte. Em breve entraremos em contato.', FALSE, 1653),
+    ('069a19f8-e1f3-4c22-a2c2-fd0709643b40', '2026-11-14T19:57:38.980221+00:00', 2027, 'ana.silva@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Ana, identificamos sua solicitação referente à senha de rede bloqueada no AD. O chamado foi direcionado para a equipe de suporte para os devidos procedimentos. Em breve você receberá atualizações.', FALSE, 1658),
+    ('e7e6ec5f-e2f6-495d-8e10-831b015e47a5', '2026-11-14T19:57:45.851364+00:00', 2028, 'carlos.souza@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Carlos, recebemos o seu chamado referente ao problema na impressora do 2º andar e ele foi categorizado como Incidente de Hardware. Nossa equipe de suporte técnico já foi acionada para realizar a verificação e o atendimento.', FALSE, 1573),
+    ('4395a7cc-a434-4ee4-81d5-dc403db46d30', '2026-11-14T19:57:48.045026+00:00', 2029, 'mariana.costa@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 1.00, 'Automatico', 'Olá, Mariana. Sua solicitação de instalação da versão homologada do navegador Chrome foi registrada com sucesso e encaminhada para a equipe responsável. Em breve entraremos em contato.', FALSE, 1364),
+    ('7e514e37-74d7-4b07-b882-ebc87aa0fcb5', '2026-11-14T19:57:54.889896+00:00', 2030, 'joao.pereira@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, João! Recebemos o seu chamado sobre a oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua demanda foi classificada como um Incidente de Redes e encaminhada para a equipe técnica analisar. Em breve entraremos em contato.', FALSE, 1543),
+    ('abbc6eca-e4c6-4e65-99a7-39094ebe6601', '2026-11-14T19:57:57.114346+00:00', 2031, 'fernanda.lima@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Fernanda. Recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro. O chamado foi classificado e encaminhado para a equipe responsável para providências.', FALSE, 1411),
+    ('4291dc06-a42d-4e80-8970-449f487bf824', '2026-11-14T19:57:59.386348+00:00', 2032, 'ricardo.alves@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Ricardo, recebemos seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Hardware para análise. Em breve entraremos em contato.', FALSE, 1476),
+    ('56d11c0b-eab1-4a5f-af6d-6724d0093b76', '2026-11-14T19:58:01.486646+00:00', 2033, 'juliana.rocha@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Media', 'Software', 0.95, 'Automatico', 'Olá, Juliana! Sua solicitação de instalação do pacote Office (Excel e Word) na estação 14 foi registrada com sucesso e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.', FALSE, 1291),
+    ('61dbc0b8-66b9-4145-ad1a-e8b15d6f4d8a', '2026-11-14T19:58:03.916671+00:00', 2034, 'lucas.martins@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.90, 'Automatico', 'Olá, Lucas! Recebemos o seu chamado referente à desconexão da VPN com erro de autenticação SSL. Sua solicitação foi classificada e encaminhada para a equipe de Redes para análise e suporte. Em breve entraremos em contato.', FALSE, 1632),
+    ('864cdfcc-0f25-4a13-a447-6584791dbb3a', '2026-11-14T19:58:06.410391+00:00', 2035, 'patricia.gomes@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Patrícia. Sua solicitação de desbloqueio de senha de rede foi recebida e encaminhada para a equipe de suporte. Entraremos em contato em breve para realizar o procedimento.', FALSE, 1635),
+    ('8d8638fb-e423-4cee-9ffa-6e5223f65050', '2026-11-14T19:58:08.818266+00:00', 2036, 'ana.silva@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Ana. Recebemos seu chamado referente à impressora do 2º andar atolada. A demanda foi classificada como Incidente e encaminhada para a equipe de Hardware para atendimento. Em breve entraremos em contato.', FALSE, 1506),
+    ('b12fff07-ad68-4fb9-b396-576b088edcd7', '2026-11-14T19:58:11.107851+00:00', 2037, 'carlos.souza@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 1.00, 'Automatico', 'Olá, Carlos! Recebemos sua solicitação de atualização do navegador corporativo (Chrome). Seu chamado foi classificado como Solicitação de Software e encaminhado para a equipe responsável. Em breve entraremos em contato.', FALSE, 1471),
+    ('214723a4-1cfa-4ef0-9ffb-d71bd68545ec', '2026-11-14T19:58:13.723987+00:00', 2038, 'mariana.costa@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Mariana, sua solicitação referente à oscilação no Wi-Fi na sala de reuniões 3 foi registrada como Incidente e encaminhada para a equipe de Redes. Entraremos em contato em breve.', FALSE, 1769),
+    ('d30b3737-92d4-4b37-ae72-e318401a6ecc', '2026-11-14T19:58:15.977896+00:00', 2039, 'joao.pereira@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, João! Recebemos sua solicitação de acesso ao ERP para o novo colaborador do financeiro. O chamado foi classificado como Solicitação na categoria Acessos e encaminhado à equipe responsável. Em breve entraremos em contato com atualizações.', FALSE, 1415),
+    ('e397ad72-3056-451a-8818-ba149ba404b3', '2026-11-14T19:58:18.364948+00:00', 2040, 'fernanda.lima@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Fernanda, recebemos o seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Hardware para análise e suporte. Em breve entraremos em contato.', FALSE, 1535),
+    ('e4a5c29d-b872-4b88-bbf0-a13d2892229d', '2026-11-14T19:58:20.795831+00:00', 2041, 'ricardo.alves@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Ricardo, sua solicitação de instalação do pacote Office foi registrada e encaminhada para a equipe de suporte técnico para providências.', FALSE, 1595),
+    ('32f917e8-520d-41f0-8398-8dc38c2cef8e', '2026-11-14T19:58:22.991916+00:00', 2042, 'juliana.rocha@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.90, 'Automatico', 'Olá Juliana, recebemos seu chamado referente à falha de conexão na VPN. Sua solicitação foi classificada como Incidente e encaminhada para a equipe de Redes para análise e suporte. Em breve entraremos em contato.', FALSE, 1391),
+    ('39631400-66b3-4151-8662-eea876fbae50', '2026-11-14T19:58:25.574083+00:00', 2043, 'lucas.martins@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 1.00, 'Automatico', 'Olá Lucas, recebemos sua solicitação referente ao desbloqueio e redefinição de sua senha de rede. Sua demanda foi encaminhada para a equipe responsável para análise e atendimento. Em breve entraremos em contato.', FALSE, 1738),
+    ('c23508ad-b8a8-4228-916b-64ecd5d8fa3f', '2026-11-14T19:58:27.895923+00:00', 2044, 'patricia.gomes@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Patricia, recebemos o seu chamado referente ao atolamento de papel na impressora do 2º andar. Sua solicitação foi classificada como Incidente (Hardware) e encaminhada para a equipe de suporte técnico realizar o atendimento.', FALSE, 1490),
+    ('c0b442d3-cab6-4a56-9883-fe91a10cccff', '2026-11-14T19:58:30.231552+00:00', 2045, 'ana.silva@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá, Ana! Recebemos sua solicitação de atualização do navegador corporativo (Chrome). O chamado foi categorizado e encaminhado para a equipe de Software. Em breve entraremos em contato.', FALSE, 1482),
+    ('bf4e4e90-4388-4444-8681-58deef96208f', '2026-11-14T19:58:37.076971+00:00', 2046, 'carlos.souza@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Carlos, recebemos seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica responsável realizar a verificação. Retornaremos em breve.', FALSE, 1580),
+    ('0aff2225-7427-42ad-97d7-14ab5cb1b947', '2026-11-14T19:58:53.162395+00:00', 2047, 'mariana.costa@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Mariana. Sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi recebida e encaminhada para a equipe de Acessos. Em breve retornaremos com a liberação.', FALSE, 1539),
+    ('23279bad-7238-4753-8d13-33b23721df79', '2026-11-14T19:58:55.499988+00:00', 2048, 'joao.pereira@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá, João. Recebemos o seu chamado referente ao monitor que não liga. A solicitação foi classificada como Incidente de Hardware e encaminhada para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1502),
+    ('03400b4a-363b-40f9-9a18-fa251d862df0', '2026-11-14T19:58:57.702312+00:00', 2049, 'fernanda.lima@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Fernanda, sua solicitação de instalação do pacote Office foi registrada e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.', FALSE, 1378),
+    ('1220ed5f-4ac9-41ae-b1c4-4bc6b3b48860', '2026-11-14T19:58:59.823952+00:00', 2050, 'ricardo.alves@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Ricardo, sua solicitação referente à queda de conexão da VPN foi registrada e classificada na categoria Redes. Nossa equipe técnica analisará o erro de autenticação SSL e entrará em contato em breve.', FALSE, 1310),
+    ('20b0c2b8-2aff-4809-843f-d8ffbbd2313d', '2026-11-14T19:59:02.130295+00:00', 2051, 'juliana.rocha@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Juliana! Recebemos sua solicitação referente ao desbloqueio e redefinição de senha de rede. Sua demanda foi triada e encaminhada para a equipe de suporte responsável. Em breve você receberá atualizações.', FALSE, 1492),
+    ('fa3fa2b8-2118-4e4a-8b71-22516ec2354e', '2026-11-14T19:59:04.510244+00:00', 2052, 'lucas.martins@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Lucas, recebemos sua solicitação referente à impressora do 2º andar. O chamado foi classificado como Incidente de Hardware e encaminhado para a equipe técnica responsável realizar o atendimento.', FALSE, 1511),
+    ('5b087d5b-15d0-417c-a475-c02282936e7b', '2026-11-14T19:59:06.649095+00:00', 2053, 'patricia.gomes@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Patricia, recebemos sua solicitação de atualização do navegador corporativo. O chamado foi classificado e encaminhado para a equipe responsável para providências.', FALSE, 1337),
+    ('d8835327-3c91-460d-b75a-f8107a17cd13', '2026-11-14T19:59:08.915358+00:00', 2054, 'ana.silva@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Ana, recebemos seu chamado referente à oscilação no Wi-Fi corporativo (sala de reuniões 3). Nossa equipe de redes foi notificada e dará andamento à análise. Em breve entraremos em contato com atualizações.', FALSE, 1452),
+    ('9fedae44-c7e3-40a4-b2b1-923644903acb', '2026-11-14T19:59:11.319929+00:00', 2055, 'carlos.souza@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Carlos, sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi recebida e encaminhada para a equipe responsável. Em breve você receberá atualizações.', FALSE, 1568),
+    ('b7d2e326-3d1d-481b-a4a2-94c44c7557aa', '2026-11-14T19:59:13.516485+00:00', 2056, 'mariana.costa@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá, Mariana! Recebemos sua solicitação referente ao monitor que não liga. O chamado foi classificado como Incidente na categoria Hardware e encaminhado para a equipe de suporte técnico realizar a análise.', FALSE, 1417),
+    ('54d2d56f-1e5b-473f-af2d-a0f14582aa7f', '2026-11-14T19:59:15.848514+00:00', 2057, 'joao.pereira@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Media', 'Software', 0.95, 'Automatico', 'Olá, João. Recebemos sua solicitação de instalação e ativação do pacote Office (Excel e Word) para a estação 14. O chamado foi classificado como Software e encaminhado para a equipe técnica responsável realizar o atendimento. Em breve entraremos em contato.', FALSE, 1520),
+    ('15b87f8f-5a43-4cc1-a659-cad0f4108fb1', '2026-11-14T19:59:18.249487+00:00', 2058, 'fernanda.lima@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, Fernanda! Identificamos seu chamado sobre a desconexão da VPN com erro de autenticação SSL. Sua solicitação foi classificada como Incidente na categoria Redes e encaminhada para a equipe de suporte técnico analisar.', FALSE, 1577),
+    ('4a30e264-6b04-476b-9963-3a30a7b7ac65', '2026-11-14T19:59:20.434314+00:00', 2059, 'ricardo.alves@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Ricardo, sua solicitação de desbloqueio de conta no AD foi recebida e encaminhada para a equipe de suporte. Em breve entraremos em contato com as instruções.', FALSE, 1408),
+    ('c259c794-b911-4229-9616-7a460cacf9ab', '2026-11-14T19:59:22.735269+00:00', 2060, 'juliana.rocha@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Juliana, recebemos seu chamado referente à impressora do 2º andar. A solicitação foi classificada como incidente de hardware e encaminhada para a equipe de suporte técnico realizar a verificação. Em breve entraremos em contato.', FALSE, 1488),
+    ('903a3f3e-16e3-43a0-b55b-f4a44de2d39c', '2026-11-14T19:59:25.474253+00:00', 2061, 'lucas.martins@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá, Lucas. Recebemos sua solicitação de atualização do navegador corporativo (Chrome). O chamado foi direcionado à equipe responsável para atendimento.', FALSE, 1902),
+    ('fef8cc74-a52e-4a98-b1de-dcf44dcaab67', '2026-11-14T19:59:27.713946+00:00', 2062, 'patricia.gomes@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, Patrícia. Recebemos seu chamado referente à oscilação no Wi-Fi corporativo (sala de reuniões 3). A demanda foi classificada como um Incidente de Redes e encaminhada à equipe técnica responsável para verificação. Retornaremos em breve.', FALSE, 1402),
+    ('44f8d775-dc80-4925-aad7-2f0f47eed42e', '2026-11-14T19:59:29.956316+00:00', 2063, 'ana.silva@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Ana, sua solicitação de acesso ao ERP para o novo colaborador foi recebida e encaminhada para a equipe responsável pela gestão de acessos. Em breve entraremos em contato com atualizações.', FALSE, 1413),
+    ('1e65bd89-fb86-4492-8f18-1d43de26159f', '2026-11-14T19:59:32.474527+00:00', 2064, 'carlos.souza@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá, Carlos! Recebemos sua solicitação referente ao monitor que não liga. O chamado foi classificado como Incidente na categoria Hardware e encaminhado para a equipe de suporte técnico realizar a análise. Em breve entraremos em contato.', FALSE, 1646),
+    ('69f450ad-e5bc-486e-a198-bb1c1d2f5ffc', '2026-11-14T19:59:34.688182+00:00', 2065, 'mariana.costa@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Mariana, recebemos sua solicitação de instalação do pacote Office (Excel e Word) na estação 14. O chamado foi categorizado como Software e encaminhado para a equipe de suporte responsável realizar o atendimento.', FALSE, 1421),
+    ('233ed5ce-dfe1-4608-9e49-f7d6bb381351', '2026-11-14T19:59:37.037785+00:00', 2066, 'joao.pereira@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá, João. Recebemos seu chamado referente à falha de conexão na VPN. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe de suporte técnico analisar. Em breve entraremos em contato.', FALSE, 1503),
+    ('5c944536-c09e-42d6-9a70-ae563b8a52f0', '2026-11-14T19:59:40.022316+00:00', 2067, 'fernanda.lima@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Fernanda, recebemos a sua solicitação referente ao desbloqueio e redefinição de senha de rede. Seu chamado foi direcionado à equipe de suporte para atendimento e em breve entraremos em contato.', FALSE, 1949),
+    ('967141de-9ea6-475c-8f5e-1cc258f8db83', '2026-11-14T19:59:42.205299+00:00', 2068, 'ricardo.alves@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá, Ricardo! Recebemos o seu chamado referente ao problema de atolamento de papel na impressora do 2º andar. A nossa equipe de suporte de Hardware já foi notificada e fará o atendimento em breve.', FALSE, 1385),
+    ('fd1fce0c-3626-493e-9fb6-5308a27c7063', '2026-11-14T19:59:57.783414+00:00', 2069, 'juliana.rocha@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Juliana, sua solicitação de instalação da versão homologada do Google Chrome foi registrada e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.', FALSE, 1597),
+    ('57848a14-9ef9-4940-ad61-dbb33f2dc6a0', '2026-11-14T20:00:00.303516+00:00', 2070, 'lucas.martins@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Lucas. Recebemos o seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como Incidente na categoria Redes e foi encaminhada para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1669),
+    ('af3ebea0-59ef-402b-82ed-12afa9fb95a2', '2026-11-14T20:00:02.694297+00:00', 2071, 'patricia.gomes@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá, Patrícia! Sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi registrada e encaminhada para a equipe responsável para liberação do perfil de leitura.', FALSE, 1476),
+    ('65c6112b-edaa-43b7-919b-d0c508786ede', '2026-11-14T20:00:04.99441+00:00', 2072, 'ana.silva@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá Ana, recebemos seu chamado referente ao monitor que não liga. Sua solicitação foi classificada como Incidente de Hardware e encaminhada para a equipe técnica responsável. Em breve entraremos em contato.', FALSE, 1457),
+    ('bdc5d8dd-a013-435c-ae8a-ad6c27470966', '2026-11-14T20:00:07.180708+00:00', 2073, 'carlos.souza@empresa.com', 'Instalação do pacote Office - Preciso do Excel e Word ativados na estação 14.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Carlos, sua solicitação de instalação do pacote Office (Excel e Word) na estação 14 foi registrada com sucesso e encaminhada para a equipe de suporte de Software. Em breve entraremos em contato.', FALSE, 1360),
+    ('f139f82f-e455-4569-a169-8a724f3b4e2b', '2026-11-14T20:00:09.39982+00:00', 2074, 'mariana.costa@empresa.com', 'VPN desconectando - Erro de autenticação SSL ao conectar de home office.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Mariana, recebemos seu chamado referente à falha de conexão na VPN. Nossa equipe de Redes irá analisar a autenticação SSL e entrará em contato em breve.', FALSE, 1392),
+    ('f82237a0-9fec-41a3-9735-cbe544c6609c', '2026-11-14T20:00:11.69213+00:00', 2075, 'joao.pereira@empresa.com', 'Esqueci minha senha de rede - Digitei a senha incorreta 3 vezes e bloqueou no AD.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá João, recebemos sua solicitação referente ao desbloqueio e redefinição de senha de rede no AD. Seu chamado foi direcionado para a equipe de suporte e será atendido em breve.', FALSE, 1442),
+    ('4923e005-a64f-4b22-8a31-baa1634dfda8', '2026-11-14T20:00:13.955594+00:00', 2076, 'fernanda.lima@empresa.com', 'Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel.', 'Incidente', 'Baixa', 'Hardware', 0.95, 'Automatico', 'Olá Fernanda, recebemos o seu chamado referente ao problema na impressora do 2º andar. A solicitação foi classificada como Incidente e encaminhada à equipe de suporte de Hardware para verificação. Em breve entraremos em contato.', FALSE, 1422),
+    ('55b18fd6-34d1-48cd-98ab-220fcdbf2b12', '2026-11-14T20:00:16.243539+00:00', 2077, 'ricardo.alves@empresa.com', 'Atualização de navegador corporativo - Solicito instalação da versão homologada do Chrome.', 'Solicitacao', 'Baixa', 'Software', 0.95, 'Automatico', 'Olá Ricardo, sua solicitação de instalação da versão homologada do navegador Chrome foi registrada com sucesso e encaminhada para a equipe responsável.', FALSE, 1349),
+    ('bd40c240-c04d-4760-b27f-3bb34adff1c3', '2026-11-14T20:00:18.53682+00:00', 2078, 'juliana.rocha@empresa.com', 'Oscilação no Wi-Fi corporativo - Sinal caindo constantemente na sala de reuniões 3.', 'Incidente', 'Media', 'Redes', 0.95, 'Automatico', 'Olá Juliana, recebemos o seu chamado referente à oscilação no Wi-Fi corporativo na sala de reuniões 3. Sua solicitação foi classificada como um Incidente de Redes e foi encaminhada para a equipe técnica responsável realizar a verificação. Em breve entraremos em contato.', FALSE, 1430),
+    ('541ab589-0356-47e8-ad65-7ee6ad28b9ec', '2026-11-14T20:00:20.886491+00:00', 2079, 'lucas.martins@empresa.com', 'Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura.', 'Solicitacao', 'Media', 'Acessos', 0.95, 'Automatico', 'Olá Lucas, sua solicitação de acesso ao ERP para o novo colaborador do financeiro foi recebida e encaminhada para a equipe de Acessos para análise e liberação.', FALSE, 1356),
+    ('c05d97ff-0411-4d16-89dd-815b4862cbe9', '2026-11-14T20:00:23.242057+00:00', 2080, 'patricia.gomes@empresa.com', 'Monitor não liga - Cabo de energia testado na tomada, mas o LED não acende.', 'Incidente', 'Media', 'Hardware', 0.95, 'Automatico', 'Olá, Patrícia. Sua solicitação referente ao monitor que não liga foi classificada como um Incidente de Hardware e encaminhada para a equipe de suporte técnico. Em breve entraremos em contato.', FALSE, 1466),
+    ('5e384bfc-3843-45e1-9903-a92247127729', '2026-11-14T20:00:25.721229+00:00', 2081, 'lucas.martins@empresa.com', 'Oscilação intermitente no link secundário - Queda rápida de pacotes na filial durante backup noturno, já voltou ao normal mas requer verificação da rota.', 'Incidente', 'Media', 'Redes', 0.90, 'Automatico', 'Olá Lucas, seu chamado referente à oscilação intermitente no link secundário foi classificado como Incidente e encaminhado para a equipe de Redes. Em breve entraremos em contato.', FALSE, 1648),
+    ('381a0813-4b93-4c51-bf54-16369412db37', '2026-11-14T20:00:28.02502+00:00', 2082, 'fernanda.lima@empresa.com', 'Lentidão pontual no acesso ao portal interno - Sistema web responde com atraso no setor comercial após troca de switch, requer verificação de rota.', 'Incidente', 'Media', 'Redes', 0.90, 'Automatico', 'Olá Fernanda, recebemos o seu chamado referente à lentidão no portal interno após a troca do switch. Sua demanda foi classificada como Incidente na categoria Redes e encaminhada para a equipe técnica responsável. Em breve entraremos em contato com atualizações.', FALSE, 1474),
+    ('c4b5006d-aa03-4a12-8e2f-5fa2e0f28e95', '2026-11-14T20:00:30.263241+00:00', 2083, 'mariana.costa@empresa.com', 'Problema no sistema - Dá erro quando tento salvar, mas às vezes vai. Verificar.', 'Incidente', 'Media', 'Software', 0.65, 'Revisao Humana', 'Olá Mariana, recebemos seu chamado sobre o erro ao salvar no sistema. Nossa equipe técnica irá analisar o ocorrido e entrará em contato em breve.', TRUE, 1402),
+    ('49788b33-0e0f-4f28-958d-2e552d19cc30', '2026-11-14T20:00:33.087932+00:00', 2084, 'joao.pereira@empresa.com', 'Estação desligando sozinha - O gabinete apita e desliga do nada, não sei se é fonte ou placa.', 'Incidente', 'Alta', 'Hardware', 0.75, 'Revisao Humana', 'Olá, João. Recebemos o seu chamado sobre a estação de trabalho desligando sozinha. O caso foi categorizado como Incidente de Hardware e encaminhado para a equipe técnica analisar o problema. Em breve entraremos em contato.', TRUE, 2001),
+    ('99548382-03d7-4359-ba81-6dbd85f2241d', '2026-11-14T20:00:35.470574+00:00', 2085, 'carlos.souza@empresa.com', 'Liberar acesso total - Preciso de permissão de administrador geral no servidor de produção.', 'Solicitacao', 'Critica', 'Acessos', 0.95, 'Revisao Humana', 'Olá Carlos, recebemos sua solicitação de acesso administrativo ao servidor de produção. Como esta operação envolve risco crítico de segurança, ela foi encaminhada para a equipe de infraestrutura e segurança da informação para análise e validação. Retornaremos em breve.', TRUE, 1582),
+    ('82ba8519-bf3b-449a-9a88-5f2e17a0adb8', '2026-11-14T20:00:37.772801+00:00', 2086, 'ricardo.alves@empresa.com', 'Erro 0x80040115 - Apareceu essa janela na tela e fechou tudo que eu estava fazendo.', 'Incidente', 'Media', 'Software', 0.70, 'Revisao Humana', 'Olá, Ricardo. Recebemos seu chamado referente ao erro 0x80040115 no software. Sua solicitação foi triada e encaminhada para a equipe técnica analisar o ocorrido. Em breve entraremos em contato.', TRUE, 1498),
+    ('7b53fa01-6ed3-4aea-bb06-287f7464c2f6', '2026-11-14T20:00:44.720832+00:00', 2087, 'juliana.rocha@empresa.com', 'Solicitação de acesso irrestrito - Usuário pede permissão de administrador local e acesso ao cofre de senhas.', 'Solicitacao', 'Alta', 'Acessos', 1.00, 'Revisao Humana', 'Olá, Juliana. Sua solicitação de acesso irrestrito (administrador local e cofre de senhas) foi registrada e encaminhada para a equipe responsável para análise de segurança e aprovação gerencial. Em breve retornaremos.', TRUE, 1622),
+    ('45004508-beb9-446e-b696-5bf4a46ac6ad', '2026-11-14T20:00:47.34028+00:00', 2088, 'lucas.martins@empresa.com', 'Ruído anormal no desktop - Máquina reiniciando aleatoriamente com cheiro de componente aquecido.', 'Incidente', 'Critica', 'Hardware', 0.95, 'Revisao Humana', 'Olá Lucas, recebemos sua solicitação referente ao ruído e cheiro de componente aquecido no desktop. Seu chamado foi classificado como Incidente de Hardware com urgência Crítica e foi encaminhado para a equipe técnica responsável.', TRUE, 1739),
+    ('f9bc98bd-67aa-4555-9343-56870c1e935a', '2026-11-14T20:00:54.220801+00:00', 2089, 'patricia.gomes@empresa.com', 'Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro.', 'Incidente', 'Media', 'Software', 0.90, 'Automatico', 'Olá Patricia, recebemos seu chamado referente ao travamento do sistema financeiro ao gerar relatórios. Sua solicitação foi classificada como Incidente de Software e encaminhada à equipe técnica responsável para análise. Em breve entraremos em contato.', FALSE, 1557),
+    ('122c7571-8f5a-400d-ae6c-42e5f0b948d7', '2026-11-14T20:00:56.743436+00:00', 2090, 'ana.silva@empresa.com', 'Não funciona nada aqui - O sistema parou depois que mexeram ontem, não sei se é rede ou PC.', 'Outros', 'Media', 'Software', 0.50, 'Revisao Humana', 'Olá Ana, recebemos o seu chamado referente à instabilidade relatada. Como o diagnóstico inicial apresenta ambiguidade entre rede e equipamento, nossa equipe técnica fará a triagem detalhada para o correto direcionamento. Em breve entraremos em contato.', TRUE, 1659),
+    ('53e38045-3a94-4326-9a90-79864ce801c8', '2026-11-14T20:00:58.808484+00:00', 2091, 'carlos.souza@empresa.com', 'Permissão temporária de root - Solicito acesso administrativo irrestrito ao banco de dados para auditoria externa.', 'Solicitacao', 'Alta', 'Acessos', 0.95, 'Revisao Humana', 'Olá, Carlos. Sua solicitação de acesso administrativo temporário foi recebida e encaminhada para a equipe de segurança e governança para análise e aprovação.', TRUE, 1285),
+    ('9665f7b0-2f04-409c-b7f1-378e9f90f04f', '2026-11-14T20:01:01.755484+00:00', 2092, 'mariana.costa@empresa.com', 'Ruído intermitente no nobreak - Equipamento do rack apresenta bipes ocasionais sem queda de energia aparente.', 'Incidente', 'Alta', 'Hardware', 0.75, 'Revisao Humana', 'Olá, Mariana. Recebemos o seu chamado referente ao ruído intermitente no nobreak do rack. A demanda foi classificada como Incidente de Hardware e encaminhada para a equipe técnica responsável. Entraremos em contato em breve para verificação do equipamento.', TRUE, 2068),
+    ('9715457d-b5a7-4ee4-9a5b-8b8944f93b46', '2026-11-14T20:01:04.119195+00:00', 2093, 'joao.pereira@empresa.com', 'Falha intermitente na integração fiscal - Notas ficam presas na fila sem mensagem conclusiva de erro.', 'Incidente', 'Alta', 'Software', 0.75, 'Revisao Humana', 'Olá, João. Recebemos o seu chamado referente à falha intermitente na integração fiscal (notas presas na fila). O caso foi classificado como Incidente em Software e encaminhado para a equipe técnica responsável analisar o erro. Entraremos em contato em breve.', TRUE, 1542),
+    ('7aaf7124-babf-46a0-929d-a8d29bf7f9f7', '2026-11-14T20:01:06.296951+00:00', 2094, 'fernanda.lima@empresa.com', 'Acesso externo urgente - Preciso liberar portas no firewall para um fornecedor hoje.', 'Solicitacao', 'Alta', 'Redes', 0.95, 'Revisao Humana', 'Olá, Fernanda. Recebemos sua solicitação de liberação de portas no firewall para fornecedor. O chamado foi classificado como Redes (Solicitação) e encaminhado para a equipe técnica responsável avaliar os procedimentos de segurança. Entraremos em contato em breve.', TRUE, 1377),
+    ('3cde738f-f139-4ef4-b05f-10ac2ee7de85', '2026-11-14T20:01:08.44112+00:00', 2095, 'ricardo.alves@empresa.com', 'Compartilhamento de credencial setorial - Solicito criação de usuário genérico sem rastreio individual para equipe terceirizada.', 'Solicitacao', 'Alta', 'Acessos', 1.00, 'Revisao Humana', 'Olá Ricardo, recebemos sua solicitação referente à criação de usuário. A demanda foi encaminhada para a equipe responsável para análise e tratamento. Retornaremos em breve.', TRUE, 1356),
+    ('9f44bd04-a911-4298-89b7-90d90b2beb1b', '2026-11-14T20:01:10.763528+00:00', 2096, 'juliana.rocha@empresa.com', 'Superaquecimento em estação de engenharia - Computador reinicia durante renderização pesada, suspeita de cooler.', 'Incidente', 'Alta', 'Hardware', 0.80, 'Revisao Humana', 'Olá Juliana, recebemos seu chamado referente ao superaquecimento na estação de engenharia e ele foi direcionado para a equipe de Hardware com urgência Alta. Um técnico analisará o caso em breve.', TRUE, 1496),
+    ('565d7649-4fb1-489f-9989-51ccb5ab6329', '2026-11-14T20:01:13.281192+00:00', 2097, 'lucas.martins@empresa.com', 'Conflito após atualização do ERP - Módulo de faturamento exibe tela branca para parte dos usuários.', 'Incidente', 'Alta', 'Software', 0.75, 'Revisao Humana', 'Olá Lucas, recebemos o seu chamado referente à falha no módulo de faturamento do ERP após a atualização. Sua demanda foi classificada como um Incidente de Software e encaminhada à equipe de suporte técnico para análise. Em breve entraremos em contato.', TRUE, 1696),
+    ('5e2fcb43-ee51-4c88-8495-27373e2a014f', '2026-11-14T20:01:15.640293+00:00', 2098, 'patricia.gomes@empresa.com', 'Abertura emergencial de firewall - Solicito liberação imediata de faixa de IPs externos na DMZ.', 'Solicitacao', 'Alta', 'Redes', 0.95, 'Revisao Humana', 'Olá, Patrícia. Sua solicitação de liberação de faixa de IPs na DMZ foi registrada e encaminhada para a equipe de Redes para análise de segurança e viabilidade técnica. Retornaremos em breve.', TRUE, 1545),
+    ('90248d67-3ad2-41f1-a1e2-e1a1910c1617', '2026-11-14T20:01:17.804255+00:00', 2099, 'ana.silva@empresa.com', 'Elevação de privilégio no Active Directory - Usuário solicita inclusão imediata no grupo Domain Admins.', 'Solicitacao', 'Alta', 'Acessos', 1.00, 'Revisao Humana', 'Olá, Ana! Recebemos sua solicitação de inclusão no grupo Domain Admins. Como este procedimento envolve privilégios administrativos críticos no Active Directory, seu chamado foi encaminhado para a equipe de segurança e infraestrutura para validação e revisão humana. Em breve entraremos em contato.', TRUE, 1337),
+    ('027943de-1c42-48ed-9dca-e183cc11dfa8', '2026-11-14T20:01:20.091691+00:00', 2100, 'carlos.souza@empresa.com', 'Lentidão severa entre matriz e filial - Túnel IPsec apresenta perda intermitente de pacotes em horários aleatórios.', 'Incidente', 'Alta', 'Redes', 0.95, 'Revisao Humana', 'Olá Carlos, recebemos seu chamado referente à lentidão severa na conexão IPsec entre a matriz e a filial. O caso foi categorizado como Incidente de Redes e encaminhado para a equipe de infraestrutura de redes analisar a perda de pacotes no túnel.', TRUE, 1477)
+;
 
 -- ============================================================================
--- Consultas de Conferência (Executar após a carga para auditoria)
+-- Consultas de Conferencia (Executar apos a carga para auditoria)
 -- ============================================================================
--- SELECT COUNT(*) AS total_registros FROM chamados_triagem;
+-- SELECT COUNT(*) AS total_registros, ROUND(AVG(tempo_processamento_ms), 1) AS media_ms FROM chamados_triagem;
 -- SELECT status_processamento, COUNT(*) AS quantidade FROM chamados_triagem GROUP BY status_processamento;
--- SELECT glpi_ticket_id, confianca_ia, nivel_urgencia, requer_revisao_humana, status_processamento
+-- SELECT glpi_ticket_id, confianca_ia, nivel_urgencia, requer_revisao_humana, status_processamento, tempo_processamento_ms
 --   FROM chamados_triagem
---  WHERE glpi_ticket_id IN (2001, 2080, 2081, 2084, 2085)
+--  WHERE glpi_ticket_id IN (2001, 2080, 2081, 2084, 2085, 2089, 2090)
 --  ORDER BY glpi_ticket_id;

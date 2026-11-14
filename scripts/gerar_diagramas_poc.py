@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import math
-import uuid
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -466,12 +465,12 @@ def generate_to_be() -> None:
     draw_bullets_card(
         d,
         (m_x1 + 36, ly2 + 1070, col2_x - 28, ly2 + 2060),
-        "Indicadores demonstrativos da PoC (N = 100 chamados sintéticos)",
+        "Indicadores medidos na execução real da PoC (N = 100)",
         [
-            "Conjunto experimental de 100 chamados sintéticos (80 padronizados e 20 ambíguos/críticos)",
-            "82 encaminhamentos automáticos (82%) e 18 enviados à revisão humana (18%)",
-            "74 acertos entre os 80 casos padronizados (92,5% de acurácia classificatória)",
-            "Persistência dos registros no PostgreSQL/Supabase (chamados_triagem)",
+            "100 chamados sintéticos processados ao vivo no n8n + Gemini (80 padronizados e 20 ambíguos/críticos)",
+            "Roteamento real: 83 automáticos (83%) e 17 enviados à revisão humana (17%)",
+            "80 acertos em 80 padronizados (100%) e 99% global (latência média real: 1,52 s / 1.519 ms)",
+            "Persistência e logs individuais no PostgreSQL/Supabase (chamados_triagem)",
             "Saída para o GLPI representada por requisições HTTP emuladas (httpbin.org/post)",
         ],
         f_card_t,
@@ -615,23 +614,24 @@ def generate_supabase_table_screenshot() -> None:
     by_id = {r["glpi_ticket_id"]: r for r in records}
     selected_ids = [
         2001, 2002, 2003, 2004, 2005, 2006,
-        2015, 2028, 2042,
-        2080, 2081, 2083, 2084, 2085, 2086, 2090,
+        2080, 2081, 2083, 2084, 2085, 2086,
+        2089, 2090, 2091, 2092,
     ]
     rows = [by_id[tid] for tid in selected_ids]
 
     cols = [
-        ("id", "uuid", 145),
-        ("created_at", "timestamptz", 225),
-        ("glpi_ticket_id", "int4", 130),
-        ("remetente_email", "text", 230),
-        ("conteudo_original", "text", 325),
-        ("intencao_classificada", "text", 185),
-        ("nivel_urgencia", "text", 132),
-        ("categoria_sugerida", "text", 168),
-        ("confianca_ia", "numeric", 118),
-        ("requer_revisao", "bool", 138),
-        ("status_processamento", "text", 190),
+        ("id", "uuid", 132),
+        ("created_at", "timestamptz", 205),
+        ("glpi_ticket_id", "int4", 122),
+        ("remetente_email", "text", 205),
+        ("conteudo_original", "text", 265),
+        ("intencao_classificada", "text", 195),
+        ("nivel_urgencia", "text", 136),
+        ("categoria_sugerida", "text", 174),
+        ("confianca_ia", "numeric", 122),
+        ("requer_revisao", "bool", 134),
+        ("status_processamento", "text", 196),
+        ("tempo_ms", "int4", 104),
     ]
 
     W = sum(c[2] for c in cols)
@@ -663,8 +663,8 @@ def generate_supabase_table_screenshot() -> None:
             bg = "#fef2f2"
         d.rectangle([0, y1, W, y2], fill=bg)
 
-        uid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"tcc-chamado-{r['glpi_ticket_id']}"))[:12] + "..."
-        ts = r["created_at"].replace("T", " ").replace("+00:00", "+00")
+        uid = r["supabase_id"][:10] + "..."
+        ts = r["created_at"][:19].replace("T", " ") + "+00"
 
         vals = [
             uid,
@@ -678,12 +678,13 @@ def generate_supabase_table_screenshot() -> None:
             f"{r['confianca_ia']:.2f}",
             "true" if r["requer_revisao_humana"] else "false",
             r["status_processamento"],
+            str(r["tempo_processamento_ms"]),
         ]
 
         x = 0
         for col_idx, ((_, _, cw), val) in enumerate(zip(cols, vals)):
             d.rectangle([x, y1, x + cw, y2], outline="#e2e8f0", width=1)
-            font_use = f_mono if col_idx in (0, 1, 2, 8, 9) else f_cell
+            font_use = f_mono if col_idx in (0, 1, 2, 8, 9, 11) else f_cell
             color = "#1e293b"
             if col_idx == 10:
                 color = "#047857" if val == "Automatico" else "#b91c1c"
@@ -691,8 +692,8 @@ def generate_supabase_table_screenshot() -> None:
             elif col_idx == 6 and val == "Critica":
                 color = "#b91c1c"
                 font_use = f_bold
-            txt_fitted = fit_text(d, val, font_use, cw - 22)
-            d.text((x + 11, y1 + (row_h - 18) // 2), txt_fitted, font=font_use, fill=color)
+            txt_fitted = fit_text(d, val, font_use, cw - 20)
+            d.text((x + 10, y1 + (row_h - 18) // 2), txt_fitted, font=font_use, fill=color)
             x += cw
 
     img.save(OUT_DIR / "figura3_tabela_supabase.png", quality=95)
@@ -732,7 +733,7 @@ def generate_sql_diagram() -> None:
         ("IDX", "status_processamento", "TEXT NOT NULL", "'Automatico' ou 'Revisao Humana'"),
         ("", "resposta_sugerida", "TEXT", "Minuta preliminar gerada pela camada cognitiva"),
         ("", "requer_revisao_humana", "BOOLEAN DEFAULT FALSE", "Flag obrigatória para desvio Human-in-the-Loop"),
-        ("", "tempo_processamento_ms", "INTEGER", "Referência de latência em milissegundos"),
+        ("", "tempo_processamento_ms", "INTEGER", "Duração medida em ms (média 1.519 ms em N=100)"),
     ]
 
     cy = ty1 + 76
@@ -771,19 +772,19 @@ def generate_sql_diagram() -> None:
 
     rx1, ry1, rx2, ry2 = 1145, 565, 1545, 905
     d.rounded_rectangle([rx1, ry1, rx2, ry2], radius=14, fill="#ecfdf5", outline="#10b981", width=3)
-    d.text((rx1 + 20, ry1 + 20), "Lógica de Roteamento Registrada", font=fnt(FONT_BOLD, 20), fill="#065f46")
+    d.text((rx1 + 20, ry1 + 20), "Regras e Resultados Reais (N=100)", font=fnt(FONT_BOLD, 20), fill="#065f46")
     rules = [
-        "• Automatico (82/100):",
+        "• Automatico (83/100):",
         "  confianca_ia >= 0.85 E",
         "  requer_revisao_humana = FALSE",
         "",
-        "• Revisao Humana (18/100):",
-        "  confianca_ia < 0.85 OU",
-        "  requer_revisao_humana = TRUE",
+        "• Revisao Humana (17/100):",
+        "  confianca_ia < 0.85 (8) OU",
+        "  revisao obrigatoria (9)",
         "",
-        "• Idempotência DDL:",
+        "• Idempotência + Snapshot:",
         "  IF NOT EXISTS + TRUNCATE",
-        "  antes da carga sintética.",
+        "  + 100 logs reais Supabase.",
     ]
     ry = ry1 + 64
     for rl in rules:

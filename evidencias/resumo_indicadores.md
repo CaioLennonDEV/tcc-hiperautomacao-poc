@@ -1,67 +1,100 @@
-# Resumo de Conferência e Cálculo dos Indicadores da PoC
+# Resumo de Conferência e Cálculo dos Indicadores Reais da PoC
 
-## 1. Transparência sobre a Origem dos Dados e Execuções
-Para fins de auditoria acadêmica, distinguem-se explicitamente as três fontes de evidência deste repositório:
-1. **Conjunto de Entrada e Gabarito Sintético (`data/chamados_sinteticos_100.json`, `data/gabarito_classificacao_100.csv`):** 100 chamados fictícios anonimizados (25 Hardware, 25 Software, 25 Redes e 25 Acessos; sendo 80 padronizados e 20 ambíguos/críticos), criados sem dados reais de usuários.
-2. **Snapshot Determinístico em SQL (`database/schema.sql` e `evidencias/resultados_execucao_100.*`):** Carga SQL reproduzível que consolida os 100 registros de exemplo na tabela `chamados_triagem` para verificação exata dos indicadores descritos no artigo (74 acertos em 80 padronizados, 82 automáticos e 18 em revisão humana). Não representa 100 chamadas pagas executadas em ambiente produtivo real.
-3. **Execução Real da Camada de Roteamento e Emulação HTTP (`evidencias/testes_valor_limite_httpbin.json`):** Validação executada via requisição HTTP POST real para `https://httpbin.org/post` (o mesmo endpoint configurado nos nós HTTP do fluxo [`n8n-workflows/triagem-chamados-workflow.json`](../n8n-workflows/triagem-chamados-workflow.json)), comprovando o comportamento do gateway condicional nos limites `0,84`, `0,85`, `0,86` e no caso crítico com confiança alta (`0,92` + `requer_revisao_humana = true`).
+## 1. Origem das Evidências e Separação de Camadas (`N = 100`)
+Todos os 100 chamados sintéticos foram executados ao vivo pelo fluxo no **n8n v2.47.7** (`workflow_id = tccPoCTriagemGLPI`), processados individualmente pelo modelo **Google Gemini (`models/gemini-3.5-flash-lite`, `temperature = 0`)** com **Structured Output Parser**, encaminhados via **`https://httpbin.org/post`** (emulando saída GLPI / fila humana sem instância produtiva) e persistidos no **Supabase (`chamados_triagem`)**:
 
-> **Nota sobre o tempo de processamento:** Os valores de `tempo_processamento_ms` presentes no snapshot SQL são referências sintéticas de demonstração. Conforme explicitado na Seção 4.2.3 do artigo (p. 23), o tempo médio de `1,9 s` informado em versão preliminar não foi mantido como medição consolidada de desempenho real.
+1. **Entrada e Gabarito Sintético ([`../data/chamados_sinteticos_100.json`](../data/chamados_sinteticos_100.json), [`../data/gabarito_classificacao_100.csv`](../data/gabarito_classificacao_100.csv)):** 100 chamados fictícios anonimizados (25 Hardware, 25 Software, 25 Redes e 25 Acessos; 80 padronizados `2001..2080` e 20 ambíguos/críticos `2081..2100`).
+2. **Logs Individuais das 100 Execuções no n8n ([`logs_execucao_n8n_100.json`](logs_execucao_n8n_100.json)):** rastreamento completo nó a nó de cada uma das 100 execuções (`n8n_execution_id` com `status = "success"`), comprovando entrada do Webhook, latência e consumo de tokens do `Google Gemini Chat Model`, JSON estruturado do `Structured Output Parser`, ramo do nó `IF`, eco HTTP 200 de `https://httpbin.org/post` e UUID gravado no Supabase.
+3. **Registros Reais Persistidos no Supabase ([`resultados_execucao_100.json`](resultados_execucao_100.json), [`resultados_execucao_100.csv`](resultados_execucao_100.csv) e [`../database/schema.sql`](../database/schema.sql)):** espelho exato das 100 linhas gravadas no banco Supabase pelo nó `Registra Auditoria no Supabase`, preservando UUIDs, timestamps UTC, respostas sugeridas geradas pelo LLM e `tempo_processamento_ms` medido em tempo real.
+4. **Testes Controlados de Valor-Limite via Python ([`testes_valor_limite_httpbin.json`](testes_valor_limite_httpbin.json)):** requisições `HTTP POST` disparadas diretamente por [`../scripts/validar_poc.py`](../scripts/validar_poc.py) para `https://httpbin.org/post` avaliando exatamente os escores de fronteira `0.84`, `0.85`, `0.86` e `0.92` (`executado_no_n8n = false`, `inferencia_gemini_real = false`), complementando as execuções ao vivo do Gemini (que retornou escores em múltiplos de `0.05`: `0.50`, `0.65`, `0.70`, `0.75`, `0.80`, `0.90`, `0.95`, `1.00`).
 
 ---
 
 ## 2. Configuração Técnica Conferida
-- **Modelo LLM no fluxo n8n:** `models/gemini-3.5-flash-lite`
-- **Temperatura:** `0`
+- **Orquestrador:** n8n `v2.47.7` | Workflow ID `tccPoCTriagemGLPI` (8 nós)
+- **Histórico de execuções habilitado:** `saveDataSuccessExecution = "all"`, `saveDataErrorExecution = "all"`, `saveManualExecutions = true`
+- **Modelo LLM:** `models/gemini-3.5-flash-lite` | Temperatura: `0`
 - **Parser JSON:** `@n8n/n8n-nodes-langchain.outputParserStructured`
-- **Limiar de confiança no nó IF:** `0.85` (combinado com `requer_revisao_humana == false`)
-- **Endpoints de emulação GLPI:** `https://httpbin.org/post` (ramo automático) e `https://httpbin.org/post` (ramo revisão humana)
-- **Varredura de segredos/tokens nos artefatos:** Limpa (`secret_scan_clean = True`)
+- **Limiar do gateway IF:** `confianca >= 0.85` AND `requer_revisao_humana == false`
+- **Expressão `tempo_processamento_ms`:** `={{ $('Webhook GLPI (Novo Chamado)').item.json.body.timestamp_inicio_ms ? Math.max(1, Date.now() - Number($('Webhook GLPI (Novo Chamado)').item.json.body.timestamp_inicio_ms)) : ($json.tempo_processamento_ms ?? null) }}` (medição real em ms sem fallback artificial)
+- **Endpoints HTTP emulados:** `https://httpbin.org/post` (automático e revisão humana; 100/100 retornaram HTTP 200)
+- **Varredura de segredos/tokens:** Limpa (`secret_scan_clean = True`)
 
 ---
 
-## 3. Indicadores Consolidados (`N = 100`)
+## 3. Indicadores Reais Medidos na Execução n8n + Gemini + Supabase (`N = 100`)
 
-| Indicador | Fórmula / Critério | Resultado Conferido |
+| Indicador | Critério / Fonte Real (`logs_execucao_n8n_100.json` + Supabase) | Valor Obtido |
 | :--- | :--- | :--- |
-| Total de chamados sintéticos | `COUNT(*)` | **100** (25 Hardware, 25 Software, 25 Redes, 25 Acessos) |
-| Cenários padronizados | `ticket_id` 2001..2080 | **80** (20 por categoria) |
-| Cenários ambíguos / críticos | `ticket_id` 2081..2100 | **20** (5 por categoria) |
-| Acertos categoriais (padronizados) | `categoria_sugerida == categoria_gabarito` em 2001..2080 | **74 de 80 (92.5%)** |
-| Divergências limítrofes (padronizados) | `categoria_sugerida != categoria_gabarito` em 2001..2080 | **6 de 80 (7.5%)** |
-| Encaminhamentos automáticos | `confianca_ia >= 0.85 AND requer_revisao_humana = FALSE` | **82 de 100 (82,0%)** |
-| Encaminhamentos para revisão humana | `confianca_ia < 0.85 OR requer_revisao_humana = TRUE` | **18 de 100 (18,0%)** |
+| Chamados sintéticos processados | Execuções `status = success` no n8n e linhas no Supabase | **100 de 100 (100,0%)** |
+| Acurácia categorial (padronizados) | `categoria_sugerida == categoria_gabarito` em `2001..2080` | **80 de 80 (100.0%)** |
+| Acurácia de intenção (padronizados) | `intencao_classificada == intencao_gabarito` em `2001..2080` | **80 de 80 (100.0%)** |
+| Acurácia categorial global (`N = 100`) | `categoria_sugerida == categoria_gabarito` em `2001..2100` | **99 de 100 (99.0%)** |
+| Acurácia de intenção global (`N = 100`) | `intencao_classificada == intencao_gabarito` em `2001..2100` | **99 de 100 (99.0%)** |
+| Concordância de roteamento com gabarito | `status_processamento == roteamento_esperado` em `2001..2100` | **99 de 100 (99.0%)** |
+| Encaminhamento automático | `confianca_ia >= 0.85` e `requer_revisao_humana = false` | **83 de 100 (83.0%)** |
+| Encaminhamento para revisão humana | `confianca_ia < 0.85` (8) ou revisão crítica obrigatória (9) | **17 de 100 (17.0%)** |
+| Tempo total medido (Webhook -> Supabase) | Média / Mediana / Mín.–Máx. (`tempo_processamento_ms`) | **1519.4 ms (~1.52 s)** / Mediana **1487.0 ms** (1285–2068 ms) |
+| Latência isolada do nó Gemini Chat Model | Média / Mediana / Mín.–Máx. (`logs_execucao_n8n_100.json`) | **937.4 ms** / Mediana **918.0 ms** (723–1466 ms) |
+| Consumo de tokens na amostra (`N = 100`) | Soma real dos 100 logs Gemini (`prompt` + `completion`) | **103,060** tokens (88,965 prompt + 14,095 saída; média **1030.6**/chamado) |
+| Retentativas transientes (HTTP 429 API) | Reenvios automáticos com *backoff* no lote de 100 disparos | **11** retentativas transientes (100% concluídos com sucesso) |
 
 ---
 
-## 4. Matriz de Confusão dos 80 Casos Padronizados (`2001..2080`)
+## 4. Matrizes de Confusão Reais (`Google Gemini` vs. Gabarito)
 
-| Gabarito \ Predição | Hardware | Software | Redes | Acessos | Total Gabarito |
+### 4.1 Subconjunto Padronizado (`2001..2080`, `N = 80`) — 80/80 (100.0%)
+
+| Gabarito \ Predição Gemini | Hardware | Software | Redes | Acessos | Total Gabarito |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| **Hardware** | 18 | 0 | 2 | 0 | 20 |
+| **Hardware** | 20 | 0 | 0 | 0 | 20 |
 | **Software** | 0 | 20 | 0 | 0 | 20 |
-| **Redes** | 0 | 0 | 19 | 1 | 20 |
-| **Acessos** | 0 | 3 | 0 | 17 | 20 |
+| **Redes** | 0 | 0 | 20 | 0 | 20 |
+| **Acessos** | 0 | 0 | 0 | 20 | 20 |
 
-### Detalhamento das 6 Divergências Semânticas (80 - 74 = 6)
+### 4.2 Amostra Completa (`2001..2100`, `N = 100`) — 99/100 (99.0%)
 
-| Ticket ID | Relato | Gabarito | Sugerida | Confiança | Roteamento |
-| :---: | :--- | :---: | :---: | :---: | :---: |
-| 2015 | Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura. | Acessos | Software | 0.88 | Automatico |
-| 2028 | Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel. | Hardware | Redes | 0.88 | Automatico |
-| 2042 | VPN desconectando - Erro de autenticação SSL ao conectar de home office. | Redes | Acessos | 0.89 | Automatico |
-| 2055 | Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura. | Acessos | Software | 0.89 | Automatico |
-| 2068 | Impressora do 2º andar atolada - Apresentando erro de bandeja e não puxa papel. | Hardware | Redes | 0.89 | Automatico |
-| 2079 | Solicitação de acesso ao ERP - Novo colaborador do financeiro precisa de perfil de leitura. | Acessos | Software | 0.87 | Automatico |
+| Gabarito \ Predição Gemini | Hardware | Software | Redes | Acessos | Total Gabarito |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Hardware** | 24 | 1 | 0 | 0 | 25 |
+| **Software** | 0 | 25 | 0 | 0 | 25 |
+| **Redes** | 0 | 0 | 25 | 0 | 25 |
+| **Acessos** | 0 | 0 | 0 | 25 | 25 |
+
+### 4.3 Divergências Observadas no Subconjunto Ambíguo/Crítico (`N = 100`)
+
+| Ticket ID | Execução n8n | Conteúdo | Gabarito (Cat / Int / Rot) | Gemini Real (Cat / Int / Rot) | Confiança |
+| :---: | :---: | :--- | :---: | :---: | :---: |
+| 2083 | 93 | Problema no sistema - Dá erro quando tento salvar, mas às vezes vai. Verificar. | Software / Duvida / Revisao Humana | Software / Incidente / Revisao Humana | 0.65 |
+| 2089 | 101 | Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro. | Software / Incidente / Revisao Humana | Software / Incidente / Automatico | 0.90 |
+| 2090 | 102 | Não funciona nada aqui - O sistema parou depois que mexeram ontem, não sei se é rede ou PC. | Hardware / Outros / Revisao Humana | Software / Outros / Revisao Humana | 0.50 |
+
+> **Análise das divergências:** Nos casos `2083` e `2090`, apesar da diferença pontual de intenção (`2083`) ou categoria (`2090`) em relatos propositalmente vagos, o modelo atribuiu confiança baixa (`0,65` e `0,50`) e sinalizou `requer_revisao_humana = true`, garantindo o desvio seguro para **Revisão Humana**. No chamado `2089` (*"Aplicativo corporativo travando - O sistema financeiro fecha sozinho ao gerar relatório sem exibir código de erro"*), o modelo acertou a categoria (`Software`) e a intenção (`Incidente`), mas atribuiu `confianca = 0,90` com `requer_revisao_humana = false`, encaminhando automaticamente apesar da expectativa conservadora do gabarito.
 
 ---
 
-## 5. Validação dos Testes de Valor-Limite e Caso Crítico (`httpbin.org/post`)
+## 5. Casos de Referência, Limite e Críticos Reais no n8n + Supabase
 
-| Ticket ID | Cenário de Teste | Confiança | `requer_revisao_humana` | Decisão Gateway | Resposta HTTP Emulada |
+| Ticket ID | `n8n_exec_id` | Categoria Gemini | Confiança | `requer_revisao_humana` | Status Supabase | Tempo Medido | UUID Supabase |
+| :---: | :---: | :---: | :---: | :---: | :--- | :---: | :--- |
+| 2001 | 2 | Acessos | 1.00 | `false` | Automatico | 1627 ms | `062d339e...` |
+| 2080 | 90 | Hardware | 0.95 | `false` | Automatico | 1466 ms | `c05d97ff...` |
+| 2081 | 91 | Redes | 0.90 | `false` | Automatico | 1648 ms | `5e384bfc...` |
+| 2084 | 94 | Hardware | 0.75 | `true` | Revisao Humana | 2001 ms | `49788b33...` |
+| 2085 | 95 | Acessos | 0.95 | `true` | Revisao Humana | 1582 ms | `99548382...` |
+| 2090 | 102 | Software | 0.50 | `true` | Revisao Humana | 1659 ms | `122c7571...` |
+| 2091 | 103 | Acessos | 0.95 | `true` | Revisao Humana | 1285 ms | `53e38045...` |
+| 2092 | 104 | Hardware | 0.75 | `true` | Revisao Humana | 2068 ms | `9665f7b0...` |
+
+---
+
+## 6. Testes Controlados de Valor-Limite HTTP via Python (`scripts/validar_poc.py` -> `httpbin.org/post`)
+*Nota: Requisições `HTTP POST` executadas diretamente pelo script Python sobre os exatos escores de fronteira (`0.84`, `0.85`, `0.86`, `0.92`) para testar a precisão matemática do gateway (`executado_no_n8n = false`, `inferencia_gemini_real = false`), em complemento às execuções reais do n8n listadas na Seção 5.*
+
+| Ticket ID | Cenário de Teste | Confiança | `requer_revisao_humana` | Decisão Gateway | Resposta HTTP Emulada (Python) |
 | :---: | :--- | :---: | :---: | :---: | :---: |
-| 2001 | Cenário padronizado N1 | 0.95 | `false` | Automatico | HTTP 200 (512.07 ms) |
-| 2080 | Caso A (Limite superior: 0.86) | 0.86 | `false` | Automatico | HTTP 200 (427.15 ms) |
-| 2081 | Caso B (No limiar exato: 0.85) | 0.85 | `false` | Automatico | HTTP 200 (531.8 ms) |
-| 2084 | Caso C (Abaixo do limiar: 0.84) | 0.84 | `true` | Revisao Humana | HTTP 200 (453.85 ms) |
-| 2085 | Caso D (Crítico com confiança alta: 0.92 + revisão obrigatória) | 0.92 | `true` | Revisao Humana | HTTP 200 (470.57 ms) |
+| 2001 | Cenário padronizado N1 (referência) | 0.95 | `false` | Automatico | HTTP 200 (503.05 ms) |
+| 2080 | Caso A — Acima do limiar (confianca = 0.86) | 0.86 | `false` | Automatico | HTTP 200 (451.35 ms) |
+| 2081 | Caso B — No limiar exato (confianca = 0.85) | 0.85 | `false` | Automatico | HTTP 200 (453.21 ms) |
+| 2084 | Caso C — Abaixo do limiar (confianca = 0.84) | 0.84 | `true` | Revisao Humana | HTTP 200 (459.76 ms) |
+| 2085 | Caso D — Crítico com confiança alta (0.92 + revisão obrigatória) | 0.92 | `true` | Revisao Humana | HTTP 200 (441.43 ms) |

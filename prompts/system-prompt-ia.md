@@ -9,10 +9,19 @@
 - **Gateway condicional:** `Verifica Confianca (Score >= 0.85)` — exige simultaneamente `requer_revisao_humana == false` e `confianca >= 0.85` para encaminhamento automático.
 
 ## 2. Papel e Instrução Diretiva (System Prompt)
-Texto configurado em `Agente Cognitivo LLM (Parsing)` (`options.systemMessage`):
+Texto completo configurado em `Agente Cognitivo LLM (Parsing)` (`@n8n/n8n-nodes-langchain.agent`, `typeVersion: 1.7`, `options.systemMessage`):
 
 ```text
-Você é um classificador determinístico para triagem de chamados do GLPI integrado à esteira de hiperautomação. Responda ESTRITAMENTE em formato JSON com as chaves: intencao, urgencia, categoria_glpi, confianca (0.0 a 1.0), resumo_demanda, resposta_sugerida e requer_revisao_humana (booleano, true se confianca < 0.85 ou alta ambiguidade/risco crítico).
+Você é um classificador determinístico para triagem inicial de chamados do GLPI integrado à esteira de hiperautomação. Analise apenas os dados informados no chamado, sem inventar dados técnicos ausentes.
+
+Retorne ESTRITAMENTE em formato JSON (via Structured Output Parser) com as chaves:
+- intencao: "Incidente" (falha, erro, travamento, queda, mau funcionamento), "Solicitacao" (pedido de acesso, criação de usuário, instalação, atualização, liberação), "Duvida" (pedido de esclarecimento sem erro objetivo claro) ou "Outros" (relato excessivamente genérico sem causa identificável).
+- urgencia: "Baixa", "Media", "Alta" ou "Critica".
+- categoria_glpi: estritamente "Acessos", "Hardware", "Redes" ou "Software".
+- confianca: número decimal de 0.0 a 1.0 refletindo a clareza e previsibilidade da classificação.
+- resumo_demanda: síntese objetiva em 1 linha.
+- resposta_sugerida: mensagem cordial de primeiro contato informando apenas a triagem e o encaminhamento (NUNCA afirme que conta já foi desbloqueada, e-mail já foi enviado, firewall já foi liberado ou instalação já foi concluída).
+- requer_revisao_humana: booleano obrigatório. Marque true sempre que confianca < 0.85, houver ambiguidade entre componentes/causas (ex.: relato vago sem código de erro conclusivo ou sem definição entre hardware/sistema/rede), ou risco crítico de segurança/infraestrutura (ex.: permissão de administrador/root/Domain Admins, acesso ao cofre de senhas, usuário genérico sem rastreio, liberação de firewall/DMZ, superaquecimento, cheiro de componente aquecido, falha em nobreak de rack ou erro em integração fiscal/faturamento). Para chamados padronizados e claros de suporte operacional (ex.: senha bloqueada no AD, perfil de leitura no ERP, monitor sem ligar com cabo testado, atolamento de papel em impressora, instalação de Office/Chrome, VPN/Wi-Fi pontual), atribua confianca >= 0.85 e requer_revisao_humana: false.
 ```
 
 ## 3. Regras de Execução e Metodologia de Limiar (Análise de Valor-Limite)
@@ -40,7 +49,7 @@ Você é um classificador determinístico para triagem de chamados do GLPI integ
 ## 5. Casos de Teste de Limite e Exemplos de Payloads (Entrada e Saída Estruturada)
 
 ### 5.1 Casos de Teste de Limite (`0.86`, `0.85`, `0.84` e Caso Crítico `0.92`)
-Os payloads completos e os logs de requisição HTTP emulada contra `https://httpbin.org/post` estão registrados em [`../evidencias/testes_valor_limite_httpbin.json`](../evidencias/testes_valor_limite_httpbin.json).
+Os payloads abaixo e os logs das requisições `HTTP POST` disparadas **diretamente pelo script Python ([`../scripts/validar_poc.py`](../scripts/validar_poc.py))** contra `https://httpbin.org/post` estão registrados em [`../evidencias/testes_valor_limite_httpbin.json`](../evidencias/testes_valor_limite_httpbin.json). Como a inferência real do Gemini nos 100 chamados retornou escores em múltiplos de `0,05` (`0,50` a `1,00`), esses testes exercitam via Python os exatos valores de fronteira (`0,84`, `0,85`, `0,86` e `0,92`) para validar a lógica do gateway (`executado_no_n8n = false`, `inferencia_gemini_real = false`), complementando os 100 logs reais exportados do n8n em [`../evidencias/logs_execucao_n8n_100.json`](../evidencias/logs_execucao_n8n_100.json).
 
 ```json
 [

@@ -1,7 +1,11 @@
 [
   {
     "glpi_ticket_id": 2001,
-    "caso_teste": "Cenário padronizado N1",
+    "caso_teste": "Cenário padronizado N1 (referência)",
+    "executor_teste": "Script Python (scripts/validar_poc.py via urllib.request)",
+    "executado_no_n8n": false,
+    "inferencia_gemini_real": false,
+    "nota_metodologica": "Teste controlado de Análise de Valor-Limite executado diretamente via Python contra httpbin.org/post para exercitar os exatos escores de fronteira (0.84, 0.85, 0.86 e crítico 0.92). A execução ao vivo do mesmo chamado no n8n+Gemini consta em evidencias/logs_execucao_n8n_100.json.",
     "input_ticket": {
       "ticket_id": 2001,
       "user_email": "carlos.souza@empresa.com",
@@ -10,10 +14,17 @@
     },
     "llm_output_simulado": {
       "intencao": "Solicitacao",
-      "urgencia": "Alta",
+      "urgencia": "Media",
       "categoria_glpi": "Acessos",
       "confianca": 0.95,
       "requer_revisao_humana": false
+    },
+    "execucao_real_n8n_referencia": {
+      "n8n_execution_id": 2,
+      "confianca_gemini": 1.0,
+      "requer_revisao_gemini": false,
+      "status_processamento": "Automatico",
+      "tempo_processamento_ms": 1627
     },
     "avaliacao_no_if": {
       "cond_requer_revisao_false": true,
@@ -25,7 +36,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 512.07,
+      "latencia_http_ms": 503.05,
       "payload_enviado": {
         "ticket_id": "2001",
         "status": "Triado Automaticamente",
@@ -40,11 +51,15 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T18:21:51.932692+00:00"
+    "executado_em_utc": "2026-11-14T20:17:48.250019+00:00"
   },
   {
     "glpi_ticket_id": 2080,
-    "caso_teste": "Caso A (Limite superior: 0.86)",
+    "caso_teste": "Caso A — Acima do limiar (confianca = 0.86)",
+    "executor_teste": "Script Python (scripts/validar_poc.py via urllib.request)",
+    "executado_no_n8n": false,
+    "inferencia_gemini_real": false,
+    "nota_metodologica": "Teste controlado de Análise de Valor-Limite executado diretamente via Python contra httpbin.org/post para exercitar os exatos escores de fronteira (0.84, 0.85, 0.86 e crítico 0.92). A execução ao vivo do mesmo chamado no n8n+Gemini consta em evidencias/logs_execucao_n8n_100.json.",
     "input_ticket": {
       "ticket_id": 2080,
       "user_email": "patricia.gomes@empresa.com",
@@ -58,6 +73,13 @@
       "confianca": 0.86,
       "requer_revisao_humana": false
     },
+    "execucao_real_n8n_referencia": {
+      "n8n_execution_id": 90,
+      "confianca_gemini": 0.95,
+      "requer_revisao_gemini": false,
+      "status_processamento": "Automatico",
+      "tempo_processamento_ms": 1466
+    },
     "avaliacao_no_if": {
       "cond_requer_revisao_false": true,
       "cond_confianca_maior_igual_0_85": true,
@@ -68,7 +90,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 427.15,
+      "latencia_http_ms": 451.35,
       "payload_enviado": {
         "ticket_id": "2080",
         "status": "Triado Automaticamente",
@@ -83,11 +105,15 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T18:21:52.360239+00:00"
+    "executado_em_utc": "2026-11-14T20:17:48.701956+00:00"
   },
   {
     "glpi_ticket_id": 2081,
-    "caso_teste": "Caso B (No limiar exato: 0.85)",
+    "caso_teste": "Caso B — No limiar exato (confianca = 0.85)",
+    "executor_teste": "Script Python (scripts/validar_poc.py via urllib.request)",
+    "executado_no_n8n": false,
+    "inferencia_gemini_real": false,
+    "nota_metodologica": "Teste controlado de Análise de Valor-Limite executado diretamente via Python contra httpbin.org/post para exercitar os exatos escores de fronteira (0.84, 0.85, 0.86 e crítico 0.92). A execução ao vivo do mesmo chamado no n8n+Gemini consta em evidencias/logs_execucao_n8n_100.json.",
     "input_ticket": {
       "ticket_id": 2081,
       "user_email": "lucas.martins@empresa.com",
@@ -96,10 +122,17 @@
     },
     "llm_output_simulado": {
       "intencao": "Incidente",
-      "urgencia": "Alta",
+      "urgencia": "Media",
       "categoria_glpi": "Redes",
       "confianca": 0.85,
       "requer_revisao_humana": false
+    },
+    "execucao_real_n8n_referencia": {
+      "n8n_execution_id": 91,
+      "confianca_gemini": 0.9,
+      "requer_revisao_gemini": false,
+      "status_processamento": "Automatico",
+      "tempo_processamento_ms": 1648
     },
     "avaliacao_no_if": {
       "cond_requer_revisao_false": true,
@@ -111,7 +144,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 531.8,
+      "latencia_http_ms": 453.21,
       "payload_enviado": {
         "ticket_id": "2081",
         "status": "Triado Automaticamente",
@@ -126,11 +159,15 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T18:21:52.892440+00:00"
+    "executado_em_utc": "2026-11-14T20:17:49.155760+00:00"
   },
   {
     "glpi_ticket_id": 2084,
-    "caso_teste": "Caso C (Abaixo do limiar: 0.84)",
+    "caso_teste": "Caso C — Abaixo do limiar (confianca = 0.84)",
+    "executor_teste": "Script Python (scripts/validar_poc.py via urllib.request)",
+    "executado_no_n8n": false,
+    "inferencia_gemini_real": false,
+    "nota_metodologica": "Teste controlado de Análise de Valor-Limite executado diretamente via Python contra httpbin.org/post para exercitar os exatos escores de fronteira (0.84, 0.85, 0.86 e crítico 0.92). A execução ao vivo do mesmo chamado no n8n+Gemini consta em evidencias/logs_execucao_n8n_100.json.",
     "input_ticket": {
       "ticket_id": 2084,
       "user_email": "joao.pereira@empresa.com",
@@ -139,10 +176,17 @@
     },
     "llm_output_simulado": {
       "intencao": "Incidente",
-      "urgencia": "Media",
+      "urgencia": "Alta",
       "categoria_glpi": "Hardware",
       "confianca": 0.84,
       "requer_revisao_humana": true
+    },
+    "execucao_real_n8n_referencia": {
+      "n8n_execution_id": 94,
+      "confianca_gemini": 0.75,
+      "requer_revisao_gemini": true,
+      "status_processamento": "Revisao Humana",
+      "tempo_processamento_ms": 2001
     },
     "avaliacao_no_if": {
       "cond_requer_revisao_false": false,
@@ -154,7 +198,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 453.85,
+      "latencia_http_ms": 459.76,
       "payload_enviado": {
         "ticket_id": "2084",
         "status": "Aguardando Revisao Humana",
@@ -167,11 +211,15 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T18:21:53.346695+00:00"
+    "executado_em_utc": "2026-11-14T20:17:49.615954+00:00"
   },
   {
     "glpi_ticket_id": 2085,
-    "caso_teste": "Caso D (Crítico com confiança alta: 0.92 + revisão obrigatória)",
+    "caso_teste": "Caso D — Crítico com confiança alta (0.92 + revisão obrigatória)",
+    "executor_teste": "Script Python (scripts/validar_poc.py via urllib.request)",
+    "executado_no_n8n": false,
+    "inferencia_gemini_real": false,
+    "nota_metodologica": "Teste controlado de Análise de Valor-Limite executado diretamente via Python contra httpbin.org/post para exercitar os exatos escores de fronteira (0.84, 0.85, 0.86 e crítico 0.92). A execução ao vivo do mesmo chamado no n8n+Gemini consta em evidencias/logs_execucao_n8n_100.json.",
     "input_ticket": {
       "ticket_id": 2085,
       "user_email": "carlos.souza@empresa.com",
@@ -185,6 +233,13 @@
       "confianca": 0.92,
       "requer_revisao_humana": true
     },
+    "execucao_real_n8n_referencia": {
+      "n8n_execution_id": 95,
+      "confianca_gemini": 0.95,
+      "requer_revisao_gemini": true,
+      "status_processamento": "Revisao Humana",
+      "tempo_processamento_ms": 1582
+    },
     "avaliacao_no_if": {
       "cond_requer_revisao_false": false,
       "cond_confianca_maior_igual_0_85": true,
@@ -195,7 +250,7 @@
     "emulacao_httpbin": {
       "endpoint": "https://httpbin.org/post",
       "http_status": 200,
-      "latencia_http_ms": 470.57,
+      "latencia_http_ms": 441.43,
       "payload_enviado": {
         "ticket_id": "2085",
         "status": "Aguardando Revisao Humana",
@@ -208,6 +263,6 @@
       },
       "erro": null
     },
-    "executado_em_utc": "2026-11-14T18:21:53.817631+00:00"
+    "executado_em_utc": "2026-11-14T20:17:50.057760+00:00"
   }
 ]
